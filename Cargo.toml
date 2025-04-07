@@ -1,0 +1,32 @@
+[package]
+name = "rotel-extension"
+version = "0.1.0"
+edition = "2024"
+homepage = "https://github.com/streamfold/rotel-lambda-extension"
+readme = "README.md"
+rust-version = "1.85.1"
+
+[dependencies]
+hyper-util = { version = "0.1", features = ["full"] }
+hyper = { version = "1", features = ["full"] }
+lambda-extension = "0.11.0"
+http-body-util = "0.1.2"
+bytes = "1.9.0"
+serde = "1"
+tokio-util = "0.7.13"
+serde_json = "1.0.135"
+tokio = { version = "1", features = ["macros"] }
+tracing = "0.1"
+http = "1.2.0"
+clap = { version = "4.5.23", features = ["derive", "env"] }
+futures = "0.3.31"
+tower-http = { version = "0.6.2", features = ["limit", "trace", "compression-gzip", "validate-request"] }
+dotenvy = "0.15.7"
+
+tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }
+tracing-appender = "0.2.3"
+tower = { version = "0.5.2", features = ["retry", "timeout"] }
+rotel = { git = "https://github.com/streamfold/rotel", rev = "9230f9e0b06167af78882c351e45fa5d895c90ec"}
+
+[dev-dependencies]
+tempfile = "3.19.1"

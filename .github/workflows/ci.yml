@@ -1,0 +1,50 @@
+name: CI
+
+on:
+  push:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  test:
+    name: test - ${{ matrix.target }}
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            runner: ubuntu-latest
+            os: ubuntu
+#          - target: aarch64-unknown-linux-gnu
+#            runner: ubuntu-24.04-arm
+#            os: ubuntu
+    runs-on: ${{ matrix.runner }}
+
+    steps:
+      - uses: actions/checkout@v4
+      - name: update apt cache
+        run: sudo apt-get update
+      - name: install protoc
+        run: sudo apt-get install -y protobuf-compiler
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          target: ${{ matrix.target }}
+          rustflags: ""
+      - name: run test
+        run: |
+          cargo test --target ${{ matrix.target }} --verbose
+
+  # Check formatting with rustfmt
+  formatting:
+    name: cargo fmt
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # Ensure rustfmt is installed and setup problem matcher
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          components: rustfmt
+          rustflags: ""
+      - name: Rustfmt Check
+        uses: actions-rust-lang/rustfmt@v1

@@ -1,0 +1,75 @@
+name: release
+
+on:
+  release:
+    types: [ created ]
+  push:
+    branches:
+      - "test-release-alpha"
+
+jobs:
+  build:
+    name: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: update apt cache
+        run: sudo apt-get update
+      - name: install protoc
+        run: sudo apt-get install -y protobuf-compiler
+      - name: install cargo lambda
+        run: |
+          brew tap cargo-lambda/cargo-lambda
+          brew install cargo-lambda
+      - name: Set build env
+        run: echo "BUILD_SHORT_SHA=$(echo -n $GITHUB_SHA | cut -c 1-7)" >> $GITHUB_ENV
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          target: x86_64-unknown-linux-gnu
+          rustflags: ""
+      - name: build amd64
+        run: cargo lambda build --extension --release --x86-64 --lambda-dir target/lambda/x86-64
+      - name: build arm64
+        run: cargo lambda build --extension --release --arm64 --lambda-dir target/lambda/arm64
+      - name: debug output
+        run: find target/lambda/ -type f | xargs ls -al
+      - uses: actions/upload-artifact@v4
+        with:
+          name: extensions-${{github.ref_name}}
+          path: target/lambda/
+          overwrite: true
+
+  release:
+    name: release to ${{maxtrix.regions}}
+    needs: [build]
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        regions: [us-east-1, us-east-2]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: extensions-${{github.ref_name}}
+      - name: debug output
+        run: find target/lambda/ -type f | xargs ls -al
+      - name: install cargo lambda
+        run: |
+          brew tap cargo-lambda/cargo-lambda
+          brew install cargo-lambda
+      - name: set suffix
+        if: contains(github.ref_name, 'alpha')
+        run: echo 'EXT_NAME_SUFFIX="-alpha"' >> $GITHUB_ENV
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_LAMBDA_DEPLOY_ROLE_ARN }}
+          aws-region: us-east-1
+      - name: deploy x86-64 extension
+        run: |
+          cargo lambda deploy --extension --region ${{matrix.regions}} --lambda-dir target/lambda/x86-64 \
+            --binary-name rotel-extension "rotel-extension${EXT_NAME_SUFFIX}"
+      - name: deploy arm64 extension
+        run: |
+          cargo lambda deploy --extension --region ${{matrix.regions}} --lambda-dir target/lambda/arm64 \
+            --binary-name rotel-extension "rotel-extension-arm64${EXT_NAME_SUFFIX}"
