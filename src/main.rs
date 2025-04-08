@@ -14,6 +14,8 @@ use rotel::init::args::{AgentRun, Exporter};
 use rotel::init::misc::bind_endpoints;
 use rotel::init::wait;
 use rotel::listener::Listener;
+use rotel_extension::lambda;
+use rotel_extension::lambda::telemetry_api::TelemetryAPI;
 use std::collections::HashMap;
 use std::env;
 use std::net::SocketAddr;
@@ -27,8 +29,6 @@ use tower_http::BoxError;
 use tracing::{error, info, warn};
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::{EnvFilter, Registry};
-use rotel_extension::lambda;
-use rotel_extension::lambda::telemetry_api::TelemetryAPI;
 
 pub const SENDING_QUEUE_SIZE: usize = 10;
 
