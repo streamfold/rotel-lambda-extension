@@ -63,7 +63,10 @@ jobs:
       - name: install cargo lambda
         run: |
           pip3 install cargo-lambda
-      - name: set arch suffix
+      - name: set amd64 arch suffix
+        if: matrix.arch == 'x86-64'
+        run: echo 'EXT_ARCH_SUFFIX=-amd64' >> $GITHUB_ENV
+      - name: set arm64 arch suffix
         if: matrix.arch == 'arm64'
         run: echo 'EXT_ARCH_SUFFIX=-arm64' >> $GITHUB_ENV
       - name: set version suffix
