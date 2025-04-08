@@ -24,7 +24,7 @@ pub async fn register(
         .method(Method::POST)
         .uri(&url)
         // This value must match the binary name, or this call will 403
-        .header(constants::EXTENSION_NAME_HEADER, "rotel-lambda-extension")
+        .header(constants::EXTENSION_NAME_HEADER, "rotel-extension")
         .header(
             constants::EXTENSION_ACCEPT_FEATURE,
             constants::EXTENSION_FEATURE_ACCOUNTID,
@@ -33,16 +33,23 @@ pub async fn register(
         .body(Full::from(Bytes::from(serde_json::to_vec(&events)?)))?;
 
     let resp = client.request(req).await?;
-    if resp.status() != 200 {
+    let (parts, body) = resp.into_parts();
+    let status = parts.status;
+
+    if status != 200 {
+        let text = body
+            .collect()
+            .await
+            .map_err(|e| format!("Failed to read response body from {}: {}", url, e))
+            .map(|c| c.to_bytes())
+            .map(|s| String::from_utf8(s.to_vec()))?
+            .map_err(|e| format!("Unable to convert response body to string: {}", e))?;
         return Err(format!(
-            "Can not register extension at {}, got {}",
-            url,
-            resp.status()
+            "Can not register extension at {}, got {}: {}",
+            url, status, text,
         )
         .into());
     }
-
-    let (parts, body) = resp.into_parts();
 
     let ext_id = match parts.headers.get(constants::EXTENSION_ID_HEADER) {
         None => {
