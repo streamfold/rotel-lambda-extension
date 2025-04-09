@@ -84,7 +84,8 @@ jobs:
           AWS_REGION: ${{matrix.region}} # Shouldn't need, but doesn't seem to respect CLI?
         run: |
           cargo lambda deploy --extension --region ${{matrix.region}} --lambda-dir target/lambda/${{ matrix.arch }} \
-            --binary-name rotel-extension "rotel-extension${EXT_ARCH_SUFFIX}${EXT_VERSION_SUFFIX}" | tee -a /tmp/lambda-deploy.out
+            --compatible-runtimes provided.al2023 --binary-name rotel-extension \
+            "rotel-extension${EXT_ARCH_SUFFIX}${EXT_VERSION_SUFFIX}" | tee -a /tmp/lambda-deploy.out
 
       - name: publish release
         run: |
