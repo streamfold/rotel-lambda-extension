@@ -1,7 +1,9 @@
 # Rotel Lambda Extension
 
-Rotel Lambda Extension is an AWS Lambda extension layer that includes the [Rotel](https://github.com/streamfold/rotel)
-Lightweight OpenTelemetry Collector.
+Rotel Lambda Extension is an advanced AWS Lambda extension layer, built on top of [Rotel](https://github.com/streamfold/rotel)—a lightweight OpenTelemetry Collector designed specifically for resource-constrained environments. By minimizing binary size, reducing cold start latency, and lowering memory overhead, this extension optimizes performance and cost efficiency in AWS Lambda deployments.
+
+![Coldstart Comparison](/contrib/coldstarts.png)
+_This chart compares cold start times between Rotel and the [OpenTelemetry Lambda](https://github.com/open-telemetry/opentelemetry-lambda/blob/main/collector/README.md) layer. Check out the benchmark code [here](https://github.com/streamfold/python-lambda-benchmark)._ 
 
 ## Using
 
@@ -29,6 +31,12 @@ The layer supports the Amazon Linux 2023
 The _{version}_ field should match the integer value for the latest release on the
 [Releases](https://github.com/streamfold/rotel-lambda-extension/releases) page,
 for example `v12-alpha` should use `12` as the version.
+
+## Auto instrumentation
+
+The Rotel Lambda layer can be used alongside the language support extension layers, found [here](https://github.com/open-telemetry/opentelemetry-lambda?tab=readme-ov-file#extension-layer-language-support). The default Rotel OTLP receiver configuration matches the defaults used for OTEL auto-instrumentation.
+
+To use a language layer, pick the extension layer ARN that matches your runtime language and include it in additional to the Rotel layer ARN above. Consult the documentation for each language layer to identify how to set `AWS_LAMBDA_EXEC_WRAPPER` so that your code is auto-instrumented on start up.
 
 ## Configuration
 
