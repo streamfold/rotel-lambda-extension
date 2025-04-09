@@ -20,7 +20,7 @@ For *alpha releases*:
 - `v1-alpha`
 - `v2-alpha`
 - ...
-  This will result in layers: `rotel-extension-alpha:1`, `rotel-extension-alpha:2`, etc. The last value is the Lambda layer version.
+  This will result in layers: `rotel-extension-amd64-alpha:1`, `rotel-extension-amd64-alpha:2`, etc. The last value is the Lambda layer version.
 
 For production releases:
 - `v1`
@@ -51,6 +51,6 @@ to raise a layer version number to a specific value.
 ./scripts/manual-deploy.sh <arch> <layer-name> <region> <how-many>
 ```
 - `arch`: either _x86-64_ or _arm64_
-- `layer-name`: full name of layer including arch and version suffix, examples: `rotel-extension-arm64-alpha`, `rotel-extension-alpha`, etc. (check Lambda console in case)
+- `layer-name`: full name of layer including arch and version suffix, examples: `rotel-extension-arm64-alpha`, `rotel-extension-amd64-alpha`, etc. (check Lambda console in case)
 - `region`: region to deploy to
 - `how-many`: how many times to deploy. If the current version is 3 and you need it to be 10, you'd pass "7" to deploy 7 times (3 + 7 = 10)
