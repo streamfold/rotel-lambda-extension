@@ -26,7 +26,7 @@ dotenvy = "0.15.7"
 tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }
 tracing-appender = "0.2.3"
 tower = { version = "0.5.2", features = ["retry", "timeout"] }
-rotel = { git = "https://github.com/streamfold/rotel", rev = "922219fbe2fd5ef38c7ea6907b453c98412b4a2a" }
+rotel = { git = "https://github.com/streamfold/rotel", rev = "dc5d935c5fdeda150e088d7df99db4753ab5c4d3" }
 #rotel = { path = "../rotel" }
 opentelemetry-proto = "0.29.0"
 chrono = "0.4.40"
