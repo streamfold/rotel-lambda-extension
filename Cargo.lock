@@ -334,8 +334,10 @@ checksum = "1a7964611d71df112cb1730f2ee67324fcf4d0fc6606acbbe9bfe06df124637c"
 dependencies = [
  "android-tzdata",
  "iana-time-zone",
+ "js-sys",
  "num-traits",
  "serde",
+ "wasm-bindgen",
  "windows-link",
 ]
 
@@ -1128,8 +1130,7 @@ dependencies = [
 [[package]]
 name = "lambda-extension"
 version = "0.11.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "97d55c5d66b02ea61602bb33e7e98d1924bb4987f8860de1f78ccc83318e0a07"
+source = "git+https://github.com/streamfold/aws-lambda-rust-runtime?branch=json-record-types#c0dedcf149593ffb17d25097d9e01f0e404d88d8"
 dependencies = [
  "async-stream",
  "bytes",
@@ -1143,15 +1144,14 @@ dependencies = [
  "serde_json",
  "tokio",
  "tokio-stream",
- "tower 0.4.13",
+ "tower 0.5.2",
  "tracing",
 ]
 
 [[package]]
 name = "lambda_runtime_api_client"
 version = "0.11.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c90a10f094475a34a04da2be11686c4dcfe214d93413162db9ffdff3d3af293a"
+source = "git+https://github.com/streamfold/aws-lambda-rust-runtime?branch=json-record-types#c0dedcf149593ffb17d25097d9e01f0e404d88d8"
 dependencies = [
  "bytes",
  "futures-channel",
@@ -1162,7 +1162,7 @@ dependencies = [
  "hyper",
  "hyper-util",
  "tokio",
- "tower 0.4.13",
+ "tower 0.5.2",
  "tower-service",
  "tracing",
  "tracing-subscriber",
@@ -1742,12 +1742,11 @@ dependencies = [
 [[package]]
 name = "rotel"
 version = "0.0.1-alpha1"
-source = "git+https://github.com/streamfold/rotel?rev=9230f9e0b06167af78882c351e45fa5d895c90ec#9230f9e0b06167af78882c351e45fa5d895c90ec"
+source = "git+https://github.com/streamfold/rotel?rev=dc5d935c5fdeda150e088d7df99db4753ab5c4d3#dc5d935c5fdeda150e088d7df99db4753ab5c4d3"
 dependencies = [
  "bytes",
  "clap",
  "daemonize",
- "dotenvy",
  "flate2",
  "flume",
  "futures",
@@ -1760,7 +1759,6 @@ dependencies = [
  "hyper",
  "hyper-rustls",
  "hyper-util",
- "lambda-extension",
  "libc",
  "num_cpus",
  "opentelemetry",
@@ -1774,7 +1772,6 @@ dependencies = [
  "read-restrict",
  "rustls",
  "rustls-pki-types",
- "serde",
  "serde_json",
  "tokio",
  "tokio-stream",
@@ -1795,6 +1792,7 @@ name = "rotel-extension"
 version = "0.1.0"
 dependencies = [
  "bytes",
+ "chrono",
  "clap",
  "dotenvy",
  "futures",
@@ -1803,6 +1801,8 @@ dependencies = [
  "hyper",
  "hyper-util",
  "lambda-extension",
+ "opentelemetry-proto",
+ "opentelemetry-semantic-conventions",
  "rotel",
  "serde",
  "serde_json",

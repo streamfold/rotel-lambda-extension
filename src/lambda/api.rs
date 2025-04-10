@@ -1,4 +1,5 @@
 use crate::lambda::constants;
+use crate::lambda::constants::TELEMETRY_API_SCHEMA;
 use crate::lambda::types::{
     RegisterResponseBody, TelemetryAPISubscribe, TelemetryAPISubscribeBuffering,
     TelemetryAPISubscribeDestination,
@@ -118,7 +119,7 @@ pub async fn telemetry_subscribe(
     addr: &SocketAddr,
 ) -> Result<(), BoxError> {
     let sub = serde_json::json!(TelemetryAPISubscribe {
-        schema_version: "2022-12-13".to_string(),
+        schema_version: TELEMETRY_API_SCHEMA.to_string(),
         types: vec![
             "platform".to_string(),
             "function".to_string(),
@@ -161,5 +162,9 @@ fn lambda_api_url(path: &str) -> Result<String, BoxError> {
     let base_api = std::env::var("AWS_LAMBDA_RUNTIME_API")
         .map_err(|e| format!("Unable to read AWS_LAMBDA_RUNTIME_API: {:?}", e))?;
 
-    Ok(format!("http://{}{}", base_api, path))
+    if base_api.starts_with("http://") {
+        Ok(format!("{}{}", base_api, path))
+    } else {
+        Ok(format!("http://{}{}", base_api, path))
+    }
 }

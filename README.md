@@ -5,6 +5,8 @@ Rotel Lambda Extension is an advanced AWS Lambda extension layer, built on top o
 ![Coldstart Comparison](/contrib/coldstarts.png)
 _This chart compares cold start times between Rotel and the [OpenTelemetry Lambda](https://github.com/open-telemetry/opentelemetry-lambda/blob/main/collector/README.md) layer. Check out the benchmark code [here](https://github.com/streamfold/python-lambda-benchmark)._ 
 
+The Rotel Lambda Extension integrates with the Lambda [TelemetryAPI](https://docs.aws.amazon.com/lambda/latest/dg/telemetry-api.html) to collect **function logs** and **extension logs** and will export them to the configured exporter. This can reduce your Lambda observability costs if you combine it with [disabling CloudWatch Logs](#disabling-cloudwatch-logs). 
+
 ## Using
 
 Choose the Lambda layer that matches your Lambda runtime architecture (**alpha** versions shown):
@@ -55,8 +57,29 @@ ROTEL_OTLP_EXPORTER_CUSTOM_HEADERS=Authorization=Bearer ${AXIOM_API_KEY},X-Axiom
 ```
 
 The values `${AXIOM_API_KEY}` and `${AXIOM_DATASET}` will be resolved from the environment of the function,
-allowing you to set the secret values in your AWS Lambda function definition and out of the on-disk file. 
+allowing you to set the secret values in your AWS Lambda function definition and out of the on-disk file.
+
+## Disabling CloudWatch Logs
+
+By default, AWS Lambda will send all Lambda logs to Amazon CloudWatch. To reduce costs, you may want to disable those logs if you are forwarding your logs to an external logging provider.
+
+1. Open the AWS Console and navigate to AWS Lambda
+2. Navigate to your Lambda function
+3. Select Configuration -> Permissions
+4. Click the execution role under "Role Name" to pop over to the IAM console
+5. Edit the role in the IAM console and remove any `logs:*` actions
+   - if you are using a custom policy, edit the policy to remove `logs:*` actions
+   - if you are using an AWS Managed policy, like `AWSLambdaBasicExecutionRole`, remove it from the role
+6. Save the role and your next execution should not send logs to CloudWatch
+
+## Community
+
+Want to chat about this project, share feedback, or suggest improvements? Join our [Discord server](https://discord.gg/reUqNWTSGC)! Whether you're a user of this project or not, we'd love to hear your thoughts and ideas. See you there! 🚀
 
 ## Developing
 
 See [DEVELOPING](/DEVELOPING.md) for developer instructions.
+
+---
+
+Built with ❤️ by Streamfold.

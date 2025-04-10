@@ -2,6 +2,8 @@ pub const REGISTER_PATH: &str = "/2020-01-01/extension/register";
 pub const NEXT_PATH: &str = "/2020-01-01/extension/event/next";
 pub const TELEMETRY_PATH: &str = "/2022-07-01/telemetry";
 
+pub const TELEMETRY_API_SCHEMA: &str = "2022-12-13";
+
 pub const EXTENSION_NAME_HEADER: &str = "Lambda-Extension-Name";
 pub const EXTENSION_ACCEPT_FEATURE: &str = "Lambda-Extension-Accept-Feature";
 
