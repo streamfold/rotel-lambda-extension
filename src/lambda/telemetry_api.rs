@@ -9,6 +9,7 @@ use hyper_util::rt::{TokioExecutor, TokioIo};
 use hyper_util::server::conn::auto::Builder;
 use hyper_util::service::TowerToHyperService;
 use lambda_extension::{LambdaTelemetry, LambdaTelemetryRecord};
+use opentelemetry_proto::tonic::logs::v1::ResourceLogs;
 use opentelemetry_proto::tonic::resource::v1::Resource;
 use opentelemetry_semantic_conventions::attribute::FAAS_INVOKED_PROVIDER;
 use opentelemetry_semantic_conventions::resource::{
@@ -25,7 +26,6 @@ use std::pin::Pin;
 use std::sync::{LazyLock, Mutex};
 use std::task::{Context, Poll};
 use std::time::{Duration, Instant};
-use opentelemetry_proto::tonic::logs::v1::ResourceLogs;
 use tokio_util::sync::CancellationToken;
 use tower::{BoxError, Service, ServiceBuilder};
 use tracing::{error, info, warn};
@@ -33,10 +33,7 @@ use tracing::{error, info, warn};
 // We don't want to create a logging loop, so limit how often we log
 // failures in certain code paths that may loop.
 const LOG_LIMIT_INTERVAL_SECS: u64 = 60;
-static LOG_LIMIT_LAST_LOG: LazyLock<Mutex<Option<Instant>>> =
-    LazyLock::new(|| {
-        Mutex::new(None)
-    });
+static LOG_LIMIT_LAST_LOG: LazyLock<Mutex<Option<Instant>>> = LazyLock::new(|| Mutex::new(None));
 
 pub struct TelemetryAPI {
     pub listener: Listener,
@@ -59,7 +56,8 @@ impl TelemetryAPI {
         cancellation: CancellationToken,
     ) -> Result<(), BoxError> {
         let resource = resource_from_env();
-        let svc = ServiceBuilder::new().service(TelemetryService::new(resource, bus_tx, self.logs_tx));
+        let svc =
+            ServiceBuilder::new().service(TelemetryService::new(resource, bus_tx, self.logs_tx));
         let svc = TowerToHyperService::new(svc);
 
         let timer = hyper_util::rt::TokioTimer::new();
@@ -125,8 +123,16 @@ pub struct TelemetryService {
 }
 
 impl TelemetryService {
-    fn new(resource: Resource, bus_tx: BoundedSender<LambdaTelemetry>, logs_tx: BoundedSender<ResourceLogs>) -> Self {
-        Self { resource, bus_tx, logs_tx }
+    fn new(
+        resource: Resource,
+        bus_tx: BoundedSender<LambdaTelemetry>,
+        logs_tx: BoundedSender<ResourceLogs>,
+    ) -> Self {
+        Self {
+            resource,
+            bus_tx,
+            logs_tx,
+        }
     }
 }
 
@@ -165,7 +171,12 @@ where
             ));
         }
 
-        Box::pin(handle_request(self.bus_tx.clone(), self.logs_tx.clone(), self.resource.clone(), body))
+        Box::pin(handle_request(
+            self.bus_tx.clone(),
+            self.logs_tx.clone(),
+            self.resource.clone(),
+            body,
+        ))
     }
 }
 
@@ -220,11 +231,11 @@ where
         match logs {
             Ok(rl) => {
                 if let Err(e) = logs_tx.send(rl).await {
-                    log_with_limit(move || {warn!("Failed to send logs: {}", e)});
+                    log_with_limit(move || warn!("Failed to send logs: {}", e));
                 }
-            },
+            }
             Err(e) => {
-                log_with_limit(move || {warn!("Failed to convert log events: {}", e)});
+                log_with_limit(move || warn!("Failed to convert log events: {}", e));
             }
         }
     }
@@ -289,7 +300,10 @@ fn log_with_limit<F: Fn()>(f: F) {
                 f();
                 *g = Some(now)
             } else {
-                if g.unwrap().add(Duration::from_secs(LOG_LIMIT_INTERVAL_SECS)).lt(&now) {
+                if g.unwrap()
+                    .add(Duration::from_secs(LOG_LIMIT_INTERVAL_SECS))
+                    .lt(&now)
+                {
                     f();
                     *g = Some(now);
                 }

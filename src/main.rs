@@ -161,7 +161,6 @@ async fn run_extension(
     telemetry_listener: Listener,
     env: &String,
 ) -> Result<(), BoxError> {
-
     let mut tapi_join_set = JoinSet::new();
     let mut agent_join_set = JoinSet::new();
 
@@ -209,7 +208,14 @@ async fn run_extension(
         let token = agent_cancel.clone();
         let agent_fut = async move {
             agent
-                .run(agent_args, port_map, SENDING_QUEUE_SIZE, env, token, Some(logs_rx))
+                .run(
+                    agent_args,
+                    port_map,
+                    SENDING_QUEUE_SIZE,
+                    env,
+                    token,
+                    Some(logs_rx),
+                )
                 .await
         };
         agent_join_set.spawn(agent_fut);
