@@ -75,3 +75,7 @@ By default, AWS Lambda will send all Lambda logs to Amazon CloudWatch. To reduce
 ## Developing
 
 See [DEVELOPING](/DEVELOPING.md) for developer instructions.
+
+---
+
+Built with ❤️ by Streamfold
