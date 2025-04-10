@@ -1,3 +1,5 @@
+use crate::lambda::logs::{Log, parse_logs};
+use crate::lambda::otel_string_attr;
 use bytes::Bytes;
 use http::header::CONTENT_TYPE;
 use http::{Method, Request, Response, StatusCode};
@@ -7,6 +9,12 @@ use hyper_util::rt::{TokioExecutor, TokioIo};
 use hyper_util::server::conn::auto::Builder;
 use hyper_util::service::TowerToHyperService;
 use lambda_extension::{LambdaTelemetry, LambdaTelemetryRecord};
+use opentelemetry_proto::tonic::resource::v1::Resource;
+use opentelemetry_semantic_conventions::attribute::FAAS_INVOKED_PROVIDER;
+use opentelemetry_semantic_conventions::resource::{
+    FAAS_MAX_MEMORY, FAAS_NAME, FAAS_VERSION, SERVICE_NAME,
+};
+use opentelemetry_semantic_conventions::trace::FAAS_INVOKED_REGION;
 use rotel::bounded_channel::BoundedSender;
 use rotel::listener::Listener;
 use std::fmt::{Debug, Display};
@@ -14,17 +22,19 @@ use std::future::Future;
 use std::net::SocketAddr;
 use std::pin::Pin;
 use std::task::{Context, Poll};
+use opentelemetry_proto::tonic::logs::v1::ResourceLogs;
 use tokio_util::sync::CancellationToken;
 use tower::{BoxError, Service, ServiceBuilder};
-use tracing::{error, info};
+use tracing::{error, info, warn};
 
 pub struct TelemetryAPI {
     pub listener: Listener,
+    pub logs_tx: BoundedSender<ResourceLogs>,
 }
 
 impl TelemetryAPI {
-    pub fn new(listener: Listener) -> Self {
-        Self { listener }
+    pub fn new(listener: Listener, logs_tx: BoundedSender<ResourceLogs>) -> Self {
+        Self { listener, logs_tx }
     }
 
     pub fn addr(&self) -> SocketAddr {
@@ -37,7 +47,8 @@ impl TelemetryAPI {
         bus_tx: BoundedSender<LambdaTelemetry>,
         cancellation: CancellationToken,
     ) -> Result<(), BoxError> {
-        let svc = ServiceBuilder::new().service(TelemetryService::new(bus_tx));
+        let resource = resource_from_env();
+        let svc = ServiceBuilder::new().service(TelemetryService::new(resource, bus_tx, self.logs_tx));
         let svc = TowerToHyperService::new(svc);
 
         let timer = hyper_util::rt::TokioTimer::new();
@@ -97,12 +108,14 @@ impl TelemetryAPI {
 
 #[derive(Clone)]
 pub struct TelemetryService {
+    resource: Resource,
     bus_tx: BoundedSender<LambdaTelemetry>,
+    logs_tx: BoundedSender<ResourceLogs>,
 }
 
 impl TelemetryService {
-    fn new(bus_tx: BoundedSender<LambdaTelemetry>) -> Self {
-        Self { bus_tx }
+    fn new(resource: Resource, bus_tx: BoundedSender<LambdaTelemetry>, logs_tx: BoundedSender<ResourceLogs>) -> Self {
+        Self { resource, bus_tx, logs_tx }
     }
 }
 
@@ -141,12 +154,14 @@ where
             ));
         }
 
-        Box::pin(handle_request(self.bus_tx.clone(), body))
+        Box::pin(handle_request(self.bus_tx.clone(), self.logs_tx.clone(), self.resource.clone(), body))
     }
 }
 
 async fn handle_request<H>(
     bus_tx: BoundedSender<LambdaTelemetry>,
+    logs_tx: BoundedSender<ResourceLogs>,
+    resource: Resource,
     body: H,
 ) -> Result<Response<Full<Bytes>>, BoxError>
 where
@@ -158,12 +173,19 @@ where
     let events: Vec<LambdaTelemetry> = serde_json::from_slice(&buf.to_vec())
         .map_err(|e| format!("unable to parse telemetry events from json: {}", e))?;
 
-    for event in &events {
+    let mut log_events = vec![];
+    for event in events {
         // We should avoid logging on Extension or Function events, since it can cause a logging
         // loop
         match event.record {
-            LambdaTelemetryRecord::Extension { .. } => break,
-            LambdaTelemetryRecord::Function { .. } => break,
+            LambdaTelemetryRecord::Extension(log) => {
+                log_events.push(Log::Extension(event.time, log));
+                continue;
+            }
+            LambdaTelemetryRecord::Function(log) => {
+                log_events.push(Log::Function(event.time, log));
+                continue;
+            }
             _ => {
                 // Keep this for debugging for now
                 info!("received telemetry event from lambda: {:?}", event);
@@ -178,6 +200,22 @@ where
                 }
             }
             _ => {} // todo: handle more
+        }
+    }
+
+    if !log_events.is_empty() {
+        // TODO: logging in here could cause a loop, can we track that we've logged
+        // for this request already?
+        let logs = parse_logs(resource, log_events);
+        match logs {
+            Ok(rl) => {
+                if let Err(e) = logs_tx.send(rl).await {
+                    warn!("Failed to send logs: {}", e);
+                }
+            },
+            Err(e) => {
+                warn!("Failed to convert log events: {}", e);
+            }
         }
     }
 
@@ -199,4 +237,34 @@ fn response_4xx_with_body(
         .status(code)
         .body(Full::new(body))
         .unwrap())
+}
+
+fn resource_from_env() -> Resource {
+    let mut r = Resource::default();
+
+    r.attributes
+        .push(otel_string_attr(FAAS_INVOKED_PROVIDER, "aws"));
+    if let Ok(val) = std::env::var("AWS_LAMBDA_FUNCTION_NAME") {
+        r.attributes
+            .push(otel_string_attr(SERVICE_NAME, val.as_str()));
+        r.attributes.push(otel_string_attr(FAAS_NAME, val.as_str()));
+    } else {
+        r.attributes
+            .push(otel_string_attr(SERVICE_NAME, "unknown_service"));
+    }
+
+    if let Ok(val) = std::env::var("AWS_LAMBDA_FUNCTION_MEMORY_SIZE") {
+        r.attributes
+            .push(otel_string_attr(FAAS_MAX_MEMORY, val.as_str()));
+    }
+    if let Ok(val) = std::env::var("AWS_LAMBDA_FUNCTION_VERSION") {
+        r.attributes
+            .push(otel_string_attr(FAAS_VERSION, val.as_str()));
+    }
+    if let Ok(val) = std::env::var("AWS_REGION") {
+        r.attributes
+            .push(otel_string_attr(FAAS_INVOKED_REGION, val.as_str()))
+    }
+
+    r
 }

@@ -19,6 +19,7 @@ use rotel_extension::lambda::telemetry_api::TelemetryAPI;
 use std::collections::HashMap;
 use std::env;
 use std::net::SocketAddr;
+use std::ops::Add;
 use std::process::ExitCode;
 use std::time::Duration;
 use tokio::select;
@@ -31,6 +32,9 @@ use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::{EnvFilter, Registry};
 
 pub const SENDING_QUEUE_SIZE: usize = 10;
+
+// todo: what is a good size here?
+pub const LOGS_QUEUE_SIZE: usize = 50;
 
 #[derive(Debug, Parser)]
 #[command(name = "rotel-lambda-extension")]
@@ -157,9 +161,14 @@ async fn run_extension(
     telemetry_listener: Listener,
     env: &String,
 ) -> Result<(), BoxError> {
-    let mut task_join_set = JoinSet::new();
+
+    let mut tapi_join_set = JoinSet::new();
+    let mut agent_join_set = JoinSet::new();
+
     let client = build_hyper_client();
+
     let (bus_tx, mut bus_rx) = bounded(10);
+    let (logs_tx, logs_rx) = bounded(LOGS_QUEUE_SIZE);
 
     let r = match lambda::api::register(client.clone()).await {
         Ok(r) => r,
@@ -200,10 +209,10 @@ async fn run_extension(
         let token = agent_cancel.clone();
         let agent_fut = async move {
             agent
-                .run(agent_args, port_map, SENDING_QUEUE_SIZE, env, token)
+                .run(agent_args, port_map, SENDING_QUEUE_SIZE, env, token, Some(logs_rx))
                 .await
         };
-        task_join_set.spawn(agent_fut);
+        agent_join_set.spawn(agent_fut);
     };
 
     if let Err(e) = lambda::api::telemetry_subscribe(
@@ -216,12 +225,12 @@ async fn run_extension(
         return Err(format!("Failed to subscribe to telemetry: {}", e).into());
     }
 
-    let telemetry = TelemetryAPI::new(telemetry_listener);
+    let telemetry = TelemetryAPI::new(telemetry_listener, logs_tx);
     let telemetry_cancel = CancellationToken::new();
     {
         let token = telemetry_cancel.clone();
         let telemetry_fut = async move { telemetry.run(bus_tx.clone(), token).await };
-        task_join_set.spawn(telemetry_fut)
+        tapi_join_set.spawn(telemetry_fut)
     };
 
     info!(
@@ -246,7 +255,13 @@ async fn run_extension(
                         }
                     }
                 },
-                e = wait::wait_for_any_task(&mut task_join_set) => {
+                e = wait::wait_for_any_task(&mut tapi_join_set) => {
+                    match e {
+                        Ok(()) => warn!("Unexpected early exit of TelemetryAPI."),
+                        Err(e) => return Err(e),
+                    }
+                },
+                e = wait::wait_for_any_task(&mut agent_join_set) => {
                     match e {
                         Ok(()) => warn!("Unexpected early exit of extension."),
                         Err(e) => return Err(e),
@@ -268,11 +283,17 @@ async fn run_extension(
         }
     }
 
+    // We have two seconds to completely shutdown
+    let final_stop = Instant::now().add(Duration::from_secs(2));
+
+    // Wait up to 500ms for the TelemetryAPI to shutdown, this will stop the logs pipeline
     telemetry_cancel.cancel();
+    wait::wait_for_tasks_with_timeout(&mut tapi_join_set, Duration::from_millis(500)).await?;
+
     agent_cancel.cancel();
 
-    // We have 2 seconds to exit
-    wait::wait_for_tasks_with_timeout(&mut task_join_set, Duration::from_secs(2)).await?;
+    // Wait for agent
+    wait::wait_for_tasks_with_deadline(&mut agent_join_set, final_stop).await?;
 
     Ok(())
 }
