@@ -20,12 +20,23 @@ use rotel::listener::Listener;
 use std::fmt::{Debug, Display};
 use std::future::Future;
 use std::net::SocketAddr;
+use std::ops::Add;
 use std::pin::Pin;
+use std::sync::{LazyLock, Mutex};
 use std::task::{Context, Poll};
+use std::time::{Duration, Instant};
 use opentelemetry_proto::tonic::logs::v1::ResourceLogs;
 use tokio_util::sync::CancellationToken;
 use tower::{BoxError, Service, ServiceBuilder};
 use tracing::{error, info, warn};
+
+// We don't want to create a logging loop, so limit how often we log
+// failures in certain code paths that may loop.
+const LOG_LIMIT_INTERVAL_SECS: u64 = 60;
+static LOG_LIMIT_LAST_LOG: LazyLock<Mutex<Option<Instant>>> =
+    LazyLock::new(|| {
+        Mutex::new(None)
+    });
 
 pub struct TelemetryAPI {
     pub listener: Listener,
@@ -204,17 +215,16 @@ where
     }
 
     if !log_events.is_empty() {
-        // TODO: logging in here could cause a loop, can we track that we've logged
-        // for this request already?
+        // Error logging here could create a loop, make sure to rate limit
         let logs = parse_logs(resource, log_events);
         match logs {
             Ok(rl) => {
                 if let Err(e) = logs_tx.send(rl).await {
-                    warn!("Failed to send logs: {}", e);
+                    log_with_limit(move || {warn!("Failed to send logs: {}", e)});
                 }
             },
             Err(e) => {
-                warn!("Failed to convert log events: {}", e);
+                log_with_limit(move || {warn!("Failed to convert log events: {}", e)});
             }
         }
     }
@@ -267,4 +277,23 @@ fn resource_from_env() -> Resource {
     }
 
     r
+}
+
+fn log_with_limit<F: Fn()>(f: F) {
+    // Don't block under any circumstance, prefer to just not log
+    match LOG_LIMIT_LAST_LOG.try_lock() {
+        Err(_) => return,
+        Ok(mut g) => {
+            let now = Instant::now();
+            if g.is_none() {
+                f();
+                *g = Some(now)
+            } else {
+                if g.unwrap().add(Duration::from_secs(LOG_LIMIT_INTERVAL_SECS)).lt(&now) {
+                    f();
+                    *g = Some(now);
+                }
+            }
+        }
+    };
 }
