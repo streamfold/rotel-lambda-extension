@@ -72,10 +72,14 @@ By default, AWS Lambda will send all Lambda logs to Amazon CloudWatch. To reduce
    - if you are using an AWS Managed policy, like `AWSLambdaBasicExecutionRole`, remove it from the role
 6. Save the role and your next execution should not send logs to CloudWatch
 
+## Community
+
+Want to chat about this project, share feedback, or suggest improvements? Join our [Discord server](https://discord.gg/reUqNWTSGC)! Whether you're a user of this project or not, we'd love to hear your thoughts and ideas. See you there! 🚀
+
 ## Developing
 
 See [DEVELOPING](/DEVELOPING.md) for developer instructions.
 
 ---
 
-Built with ❤️ by Streamfold
+Built with ❤️ by Streamfold.
