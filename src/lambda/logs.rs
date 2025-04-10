@@ -67,7 +67,7 @@ pub(crate) fn parse_logs(resource: Resource, logs: Vec<Log>) -> Result<ResourceL
             // https://docs.aws.amazon.com/lambda/latest/dg/telemetry-schema-reference.html#telemetry-api-function
             match record {
                 Value::Object(mut rec) => {
-                    if let Some(Value::String(ts)) = rec.get("value") {
+                    if let Some(Value::String(ts)) = rec.get("timestamp") {
                         if let Ok(dt) = DateTime::parse_from_rfc3339(ts.as_str()) {
                             if let Some(nanos) = dt.timestamp_nanos_opt() {
                                 lr.time_unix_nano = nanos as u64;
@@ -149,9 +149,20 @@ fn severity_text_to_number(level: &String) -> SeverityNumber {
 
 #[cfg(test)]
 mod tests {
-    use chrono::{DateTime, Utc};
+    use crate::lambda::logs::{Log, parse_logs};
+    use crate::lambda::otel_string_attr;
+    use chrono::DateTime;
     use lambda_extension::LambdaTelemetryRecord;
-    use serde::{Deserialize, Serialize};
+    use opentelemetry_proto::tonic::common::v1::KeyValue;
+    use opentelemetry_proto::tonic::common::v1::any_value::Value::StringValue;
+    use opentelemetry_proto::tonic::logs::v1::SeverityNumber;
+    use opentelemetry_proto::tonic::resource::v1::Resource;
+    use opentelemetry_semantic_conventions::attribute::FAAS_INVOCATION_ID;
+    use opentelemetry_semantic_conventions::resource::SERVICE_NAME;
+    use serde_json::Value;
+    use std::collections::HashMap;
+    use std::ops::{Add, Sub};
+    use std::time::{Duration, SystemTime};
 
     #[test]
     fn test_json_record() {
@@ -176,5 +187,108 @@ mod tests {
 
         let as_str: LambdaTelemetryRecord = serde_json::from_str(str_rec).unwrap();
         println!("as str: {:?}", as_str);
+    }
+
+    #[test]
+    fn test_log_parse() {
+        let now = SystemTime::now();
+        let tm1 = DateTime::from(now.sub(Duration::from_secs(3600)));
+        let tm2 = tm1.add(Duration::from_secs(60));
+        let tm3 = tm2.add(Duration::from_secs(60));
+        let mut r = Resource::default();
+        r.attributes
+            .push(otel_string_attr(SERVICE_NAME, "test_log_parse"));
+
+        let logs = vec![
+            Log::Function(
+                tm1,
+                Value::Object(json_map(HashMap::from([
+                    ("timestamp", Value::String(tm2.to_rfc3339())),
+                    ("level", Value::String("warn".to_string())),
+                    ("requestId", Value::String("1234abcd".to_string())),
+                    ("message", Value::String("the message".to_string())),
+                ]))),
+            ),
+            Log::Extension(tm3, Value::String("INFO Plain text message".to_string())),
+        ];
+
+        let mut res = parse_logs(r, logs).unwrap();
+
+        assert_eq!(1, res.scope_logs.len());
+        assert_eq!(2, res.scope_logs[0].log_records.len());
+
+        assert_eq!(
+            Some("test_log_parse".to_string()),
+            find_str_attr(&res.resource.unwrap().attributes, SERVICE_NAME)
+        );
+
+        let log2 = res.scope_logs[0].log_records.pop().unwrap();
+        let log1 = res.scope_logs[0].log_records.pop().unwrap();
+
+        // log 1
+        assert_eq!(
+            tm2.timestamp_nanos_opt().unwrap() as u64,
+            log1.time_unix_nano
+        );
+        assert_eq!(SeverityNumber::Warn as i32, log1.severity_number);
+        assert_eq!(SeverityNumber::Warn.as_str_name(), log1.severity_text);
+        assert_eq!(2, log1.attributes.len());
+        assert_eq!(
+            Some("1234abcd".to_string()),
+            find_str_attr(&log1.attributes, FAAS_INVOCATION_ID)
+        );
+        assert_eq!(
+            Some("function".to_string()),
+            find_str_attr(&log1.attributes, "type")
+        );
+        assert_eq!(
+            StringValue("the message".to_string()),
+            log1.body.unwrap().value.unwrap()
+        );
+
+        // log 2
+        assert_eq!(
+            Some("extension".to_string()),
+            find_str_attr(&log2.attributes, "type")
+        );
+        assert_eq!(
+            StringValue("INFO Plain text message".to_string()),
+            log2.body.unwrap().value.unwrap()
+        );
+    }
+
+    #[test]
+    fn test_log_parse_invalid() {
+        let tm1 = DateTime::from(SystemTime::now().sub(Duration::from_secs(3600)));
+        let mut r = Resource::default();
+        r.attributes
+            .push(otel_string_attr(SERVICE_NAME, "test_log_parse"));
+
+        let logs = vec![Log::Extension(
+            tm1,
+            Value::Array(vec![Value::String("invalid".to_string())]),
+        )];
+
+        let res = parse_logs(r, logs);
+        assert!(res.is_err())
+    }
+
+    fn json_map(m: HashMap<&str, Value>) -> serde_json::Map<String, Value> {
+        let mut new_map = serde_json::Map::new();
+        for (k, v) in m.into_iter() {
+            new_map.insert(k.to_string(), v);
+        }
+        new_map
+    }
+
+    fn find_str_attr(attrs: &Vec<KeyValue>, key: &str) -> Option<String> {
+        attrs
+            .iter()
+            .find(|kv| kv.key.eq(key))
+            .map(|kv| match kv.value.clone().unwrap().value.unwrap() {
+                StringValue(v) => Some(v),
+                _ => None,
+            })
+            .flatten()
     }
 }
