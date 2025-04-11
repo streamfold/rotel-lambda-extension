@@ -25,7 +25,7 @@ use std::process::ExitCode;
 use std::time::Duration;
 use tokio::select;
 use tokio::task::JoinSet;
-use tokio::time::{timeout, Instant};
+use tokio::time::{Instant, timeout};
 use tokio_util::sync::CancellationToken;
 use tower_http::BoxError;
 use tracing::{error, info, warn};
@@ -310,31 +310,41 @@ async fn run_extension(
 
 async fn force_flush(pipeline_tx: &mut FlushSender, exporters_tx: &mut FlushSender) {
     let start = Instant::now();
-    match timeout(Duration::from_millis(FLUSH_PIPELINE_TIMEOUT_MILLIS), pipeline_tx.broadcast()).await {
+    match timeout(
+        Duration::from_millis(FLUSH_PIPELINE_TIMEOUT_MILLIS),
+        pipeline_tx.broadcast(),
+    )
+    .await
+    {
         Err(_) => {
             warn!("timeout waiting to flush pipelines");
-            return
-        },
+            return;
+        }
         Ok(Err(e)) => {
             warn!("failed to flush pipelines: {}", e);
-            return
+            return;
         }
-        _ => {},
+        _ => {}
     }
     let duration = Instant::now().duration_since(start);
     info!(?duration, "finished flushing pipeline");
 
     let start = Instant::now();
-    match timeout(Duration::from_millis(FLUSH_EXPORTERS_TIMEOUT_MILLIS), exporters_tx.broadcast()).await {
+    match timeout(
+        Duration::from_millis(FLUSH_EXPORTERS_TIMEOUT_MILLIS),
+        exporters_tx.broadcast(),
+    )
+    .await
+    {
         Err(_) => {
             warn!("timeout waiting to flush exporters");
-            return
-        },
+            return;
+        }
         Ok(Err(e)) => {
             warn!("failed to flush exporters: {}", e);
-            return
+            return;
         }
-        _ => {},
+        _ => {}
     }
     let duration = Instant::now().duration_since(start);
     info!(?duration, "finished flushing exporters");
