@@ -17,13 +17,14 @@ use rotel::listener::Listener;
 use rotel::topology::flush_control::{FlushBroadcast, FlushSender};
 use rotel_extension::lambda;
 use rotel_extension::lambda::telemetry_api::TelemetryAPI;
+use rotel_extension::lifecycle::flush_control::{FlushControl, FlushMode};
 use std::collections::HashMap;
 use std::env;
 use std::net::SocketAddr;
 use std::ops::Add;
 use std::process::ExitCode;
 use std::time::Duration;
-use tokio::select;
+use tokio::{pin, select};
 use tokio::task::JoinSet;
 use tokio::time::{Instant, timeout};
 use tokio_util::sync::CancellationToken;
@@ -249,47 +250,96 @@ async fn run_extension(
         Ok(evt) => evt,
         Err(e) => return Err(format!("Failed to read next event: {}", e).into()),
     };
-
     handle_next_response(next_evt);
-    loop {
-        'inner: loop {
-            select! {
-                msg = bus_rx.next() => {
-                    if let Some(evt) = msg {
-                        if let LambdaTelemetryRecord::PlatformRuntimeDone {..} = evt.record {
-                            break 'inner;
+
+    let mut flush_control = FlushControl::new();
+
+    'outer: loop {
+        let mode = flush_control.pick();
+        let mut shutdown = false;
+
+        match mode {
+            FlushMode::AfterCall => {
+                'inner: loop {
+                    //
+                    // We must flush after every invocation
+                    //
+                    select! {
+                        msg = bus_rx.next() => {
+                            if let Some(evt) = msg {
+                                if let LambdaTelemetryRecord::PlatformRuntimeDone {..} = evt.record {
+                                    break 'inner;
+                                }
+                            }
+                        },
+                        e = wait::wait_for_any_task(&mut tapi_join_set) => {
+                            match e {
+                                Ok(()) => warn!("Unexpected early exit of TelemetryAPI."),
+                                Err(e) => return Err(e),
+                            }
+                        },
+                        e = wait::wait_for_any_task(&mut agent_join_set) => {
+                            match e {
+                                Ok(()) => warn!("Unexpected early exit of extension."),
+                                Err(e) => return Err(e),
+                            }
+                        },
+                    }
+                }
+
+                //
+                // Force a flush
+                //
+                force_flush(&mut flush_pipeline_tx, &mut flush_exporters_tx).await;
+
+                info!("Received a platform runtime done message, invoking next request");
+                let next_evt = match lambda::api::next_request(client.clone(), &r.extension_id).await {
+                    Ok(evt) => evt,
+                    Err(e) => return Err(format!("Failed to read next event: {}", e).into()),
+                };
+
+
+                shutdown = handle_next_response(next_evt);
+            }
+            FlushMode::Periodic(mut control) => {
+                // Check if we need to force a flush, this should happen concurrently with the
+                // function invocation.
+                if control.should_flush() {
+                    force_flush(&mut flush_pipeline_tx, &mut flush_exporters_tx).await;
+                }
+
+                let next_event_fut = lambda::api::next_request(client.clone(), &r.extension_id);
+                pin!(next_event_fut);
+
+                'periodic_inner: loop {
+                    select! {
+                        biased;
+
+                        next_resp = &mut next_event_fut => {
+                            match next_resp {
+                                Err(e) => return Err(format!("Failed to read next event: {}", e).into()),
+                                Ok(next_evt) => {
+                                    let shutdown = handle_next_response(next_evt);
+
+                                    break 'periodic_inner;
+                                }
+
+                            }
                         }
+
+                        msg = bus_rx.next() => {
+                            // Mostly ignore these here for now
+                        },
+
                     }
-                },
-                e = wait::wait_for_any_task(&mut tapi_join_set) => {
-                    match e {
-                        Ok(()) => warn!("Unexpected early exit of TelemetryAPI."),
-                        Err(e) => return Err(e),
-                    }
-                },
-                e = wait::wait_for_any_task(&mut agent_join_set) => {
-                    match e {
-                        Ok(()) => warn!("Unexpected early exit of extension."),
-                        Err(e) => return Err(e),
-                    }
-                },
+                }
+
             }
         }
 
-        //
-        // Force a flush
-        //
-        force_flush(&mut flush_pipeline_tx, &mut flush_exporters_tx).await;
-
-        info!("Received a platform runtime done message, invoking next request");
-        let next_evt = match lambda::api::next_request(client.clone(), &r.extension_id).await {
-            Ok(evt) => evt,
-            Err(e) => return Err(format!("Failed to read next event: {}", e).into()),
-        };
-
-        if handle_next_response(next_evt) {
-            info!("shutdown received, exiting");
-            break;
+        if shutdown {
+            info!("Shutdown received, exiting");
+            break 'outer;
         }
     }
 
