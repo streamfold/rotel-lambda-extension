@@ -14,6 +14,7 @@ use rotel::init::args::{AgentRun, Exporter};
 use rotel::init::misc::bind_endpoints;
 use rotel::init::wait;
 use rotel::listener::Listener;
+use rotel::topology::flush_control::{FlushBroadcast, FlushSender};
 use rotel_extension::lambda;
 use rotel_extension::lambda::telemetry_api::TelemetryAPI;
 use std::collections::HashMap;
@@ -24,7 +25,7 @@ use std::process::ExitCode;
 use std::time::Duration;
 use tokio::select;
 use tokio::task::JoinSet;
-use tokio::time::Instant;
+use tokio::time::{timeout, Instant};
 use tokio_util::sync::CancellationToken;
 use tower_http::BoxError;
 use tracing::{error, info, warn};
@@ -35,6 +36,10 @@ pub const SENDING_QUEUE_SIZE: usize = 10;
 
 // todo: what is a good size here?
 pub const LOGS_QUEUE_SIZE: usize = 50;
+
+// todo: make these configurable
+pub const FLUSH_PIPELINE_TIMEOUT_MILLIS: u64 = 500;
+pub const FLUSH_EXPORTERS_TIMEOUT_MILLIS: u64 = 3_000;
 
 #[derive(Debug, Parser)]
 #[command(name = "rotel-lambda-extension")]
@@ -174,6 +179,9 @@ async fn run_extension(
         Err(e) => return Err(format!("Failed to register extension: {}", e).into()),
     };
 
+    let (mut flush_pipeline_tx, flush_pipeline_sub) = FlushBroadcast::new().into_parts();
+    let (mut flush_exporters_tx, flush_exporters_sub) = FlushBroadcast::new().into_parts();
+
     let agent_cancel = CancellationToken::new();
     {
         let mut agent_args = agent_args;
@@ -203,21 +211,13 @@ async fn run_extension(
             }
         }
 
-        let agent = Agent::default();
-        let env = env.clone();
+        let agent = Agent::new(agent_args, port_map, SENDING_QUEUE_SIZE, env.clone())
+            .with_logs_rx(logs_rx)
+            .with_pipeline_flush(flush_pipeline_sub)
+            .with_exporters_flush(flush_exporters_sub);
         let token = agent_cancel.clone();
-        let agent_fut = async move {
-            agent
-                .run(
-                    agent_args,
-                    port_map,
-                    SENDING_QUEUE_SIZE,
-                    env,
-                    token,
-                    Some(logs_rx),
-                )
-                .await
-        };
+        let agent_fut = async move { agent.run(token).await };
+
         agent_join_set.spawn(agent_fut);
     };
 
@@ -276,7 +276,11 @@ async fn run_extension(
             }
         }
 
-        // todo: this is where we would force a flush
+        //
+        // Force a flush
+        //
+        force_flush(&mut flush_pipeline_tx, &mut flush_exporters_tx).await;
+
         info!("Received a platform runtime done message, invoking next request");
         let next_evt = match lambda::api::next_request(client.clone(), &r.extension_id).await {
             Ok(evt) => evt,
@@ -302,6 +306,38 @@ async fn run_extension(
     wait::wait_for_tasks_with_deadline(&mut agent_join_set, final_stop).await?;
 
     Ok(())
+}
+
+async fn force_flush(pipeline_tx: &mut FlushSender, exporters_tx: &mut FlushSender) {
+    let start = Instant::now();
+    match timeout(Duration::from_millis(FLUSH_PIPELINE_TIMEOUT_MILLIS), pipeline_tx.broadcast()).await {
+        Err(_) => {
+            warn!("timeout waiting to flush pipelines");
+            return
+        },
+        Ok(Err(e)) => {
+            warn!("failed to flush pipelines: {}", e);
+            return
+        }
+        _ => {},
+    }
+    let duration = Instant::now().duration_since(start);
+    info!(?duration, "finished flushing pipeline");
+
+    let start = Instant::now();
+    match timeout(Duration::from_millis(FLUSH_EXPORTERS_TIMEOUT_MILLIS), exporters_tx.broadcast()).await {
+        Err(_) => {
+            warn!("timeout waiting to flush exporters");
+            return
+        },
+        Ok(Err(e)) => {
+            warn!("failed to flush exporters: {}", e);
+            return
+        }
+        _ => {},
+    }
+    let duration = Instant::now().duration_since(start);
+    info!(?duration, "finished flushing exporters");
 }
 
 fn handle_next_response(evt: NextEvent) -> bool {
