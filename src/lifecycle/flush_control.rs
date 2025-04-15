@@ -4,14 +4,19 @@ use std::time::SystemTime;
 use crate::lifecycle::flush_control::FlushMode::{AfterCall, Periodic};
 use crate::lifecycle::invocation_rate::InvocationRate;
 
-// Controls whether we should flush at the top of a function
-// execution. todo: make this configurable
-const PERIODIC_FLUSH_RATE_MILLIS: u64 = 20_000;
+// Default flush interval that captures any long duration
+// lambda invocations. If we flush at the end or periodically at the
+// beginning of an invocation, then this interval is reset
+pub const DEFAULT_FLUSH_INTERVAL_MILLIS: u64 = 60 * 1_000;
+
+// Interval used when flushing periodically at the beginning of an
+// invocation.
+const PERIODIC_FLUSH_RATE_MILLIS: u64 = 20 * 1_000;
 
 // If the invocation rate is faster than this, switch to periodically
 // flushing on an interval timer. Otherwise we'll flush at the end of
 // an invocation.
-const ACTIVE_INVOCATION_RATE_MILLIS: u64 = 60_000;
+const ACTIVE_INVOCATION_RATE_MILLIS: u64 = 60 * 1_000;
 
 pub struct FlushControl {
     rate: InvocationRate,
