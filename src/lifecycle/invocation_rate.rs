@@ -1,4 +1,3 @@
-use std::time::SystemTime;
 
 // If we didn't execute for 5mins, reset
 const RESET_LENGTH_MILLIS: u64 = 300 * 1_000;
@@ -23,7 +22,7 @@ impl InvocationRate {
 
         let delta_millis = now_millis - self.last_time_millis;
         if delta_millis >= RESET_LENGTH_MILLIS || self.count == 0 {
-            self.value = delta_millis as f64;
+            self.value = 0.0;
             self.last_time_millis = now_millis;
             self.count = 1;
             return

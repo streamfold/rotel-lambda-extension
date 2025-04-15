@@ -264,7 +264,7 @@ async fn run_extension(
 
     'outer: loop {
         let mode = flush_control.pick();
-        let mut shutdown = false;
+        let should_shutdown;
 
         match mode {
             FlushMode::AfterCall => {
@@ -315,7 +315,7 @@ async fn run_extension(
                         Err(e) => return Err(format!("Failed to read next event: {}", e).into()),
                     };
 
-                shutdown = handle_next_response(next_evt);
+                should_shutdown = handle_next_response(next_evt);
             }
             FlushMode::Periodic(mut control) => {
                 // Check if we need to force a flush, this should happen concurrently with the
@@ -339,7 +339,7 @@ async fn run_extension(
                             match next_resp {
                                 Err(e) => return Err(format!("Failed to read next event: {}", e).into()),
                                 Ok(next_evt) => {
-                                    shutdown = handle_next_response(next_evt);
+                                    should_shutdown = handle_next_response(next_evt);
 
                                     break 'periodic_inner;
                                 }
@@ -347,7 +347,7 @@ async fn run_extension(
                             }
                         }
 
-                        msg = bus_rx.next() => {
+                        _ = bus_rx.next() => {
                             // Mostly ignore these here for now
                         },
 
@@ -373,7 +373,7 @@ async fn run_extension(
             }
         }
 
-        if shutdown {
+        if should_shutdown {
             info!("Shutdown received, exiting");
             break 'outer;
         }

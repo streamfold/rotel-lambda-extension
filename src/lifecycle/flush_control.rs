@@ -1,4 +1,3 @@
-use std::sync::atomic::AtomicU64;
 use std::sync::{Arc, Mutex};
 use std::time::SystemTime;
 use crate::lifecycle::flush_control::FlushMode::{AfterCall, Periodic};
