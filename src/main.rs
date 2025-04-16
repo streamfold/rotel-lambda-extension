@@ -18,14 +18,14 @@ use rotel::topology::flush_control::{FlushBroadcast, FlushSender};
 use rotel_extension::lambda;
 use rotel_extension::lambda::telemetry_api::TelemetryAPI;
 use rotel_extension::lifecycle::flush_control::{
-    DEFAULT_FLUSH_INTERVAL_MILLIS, FlushControl, FlushMode,
+    Clock, DEFAULT_FLUSH_INTERVAL_MILLIS, FlushControl, FlushMode,
 };
 use std::collections::HashMap;
 use std::env;
 use std::net::SocketAddr;
 use std::ops::Add;
 use std::process::ExitCode;
-use std::time::Duration;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tokio::task::JoinSet;
 use tokio::time::{Instant, Interval, timeout};
 use tokio::{pin, select};
@@ -260,7 +260,7 @@ async fn run_extension(
     };
     handle_next_response(next_evt);
 
-    let mut flush_control = FlushControl::new();
+    let mut flush_control = FlushControl::new(SystemClock {});
 
     'outer: loop {
         let mode = flush_control.pick();
@@ -321,7 +321,12 @@ async fn run_extension(
                 // Check if we need to force a flush, this should happen concurrently with the
                 // function invocation.
                 if control.should_flush() {
-                    force_flush(&mut flush_pipeline_tx, &mut flush_exporters_tx, &mut default_flush_interval).await;
+                    force_flush(
+                        &mut flush_pipeline_tx,
+                        &mut flush_exporters_tx,
+                        &mut default_flush_interval,
+                    )
+                    .await;
                 }
 
                 let next_event_fut = lambda::api::next_request(client.clone(), &r.extension_id);
@@ -527,5 +532,17 @@ mod test {
         tf.flush().unwrap();
 
         tf
+    }
+}
+
+#[derive(Clone)]
+struct SystemClock;
+
+impl Clock for SystemClock {
+    fn now(&self) -> u64 {
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_millis() as u64
     }
 }
