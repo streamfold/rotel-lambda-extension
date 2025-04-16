@@ -53,7 +53,7 @@ function bundle:
 ```shell
 ROTEL_OTLP_EXPORTER_ENDPOINT=https://api.axiom.co
 ROTEL_OTLP_EXPORTER_PROTOCOL=http
-ROTEL_OTLP_EXPORTER_CUSTOM_HEADERS=Authorization=Bearer ${AXIOM_API_KEY},X-Axiom-Dataset=${AXIOM_DATASET}
+ROTEL_OTLP_EXPORTER_CUSTOM_HEADERS="Authorization=Bearer ${AXIOM_API_KEY},X-Axiom-Dataset=${AXIOM_DATASET}"
 ```
 
 The values `${AXIOM_API_KEY}` and `${AXIOM_DATASET}` will be resolved from the environment of the function,

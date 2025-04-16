@@ -14,17 +14,21 @@ use rotel::init::args::{AgentRun, Exporter};
 use rotel::init::misc::bind_endpoints;
 use rotel::init::wait;
 use rotel::listener::Listener;
+use rotel::topology::flush_control::{FlushBroadcast, FlushSender};
 use rotel_extension::lambda;
 use rotel_extension::lambda::telemetry_api::TelemetryAPI;
+use rotel_extension::lifecycle::flush_control::{
+    Clock, DEFAULT_FLUSH_INTERVAL_MILLIS, FlushControl, FlushMode,
+};
 use std::collections::HashMap;
 use std::env;
 use std::net::SocketAddr;
 use std::ops::Add;
 use std::process::ExitCode;
-use std::time::Duration;
-use tokio::select;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tokio::task::JoinSet;
-use tokio::time::Instant;
+use tokio::time::{Instant, Interval, timeout};
+use tokio::{pin, select};
 use tokio_util::sync::CancellationToken;
 use tower_http::BoxError;
 use tracing::{error, info, warn};
@@ -33,8 +37,13 @@ use tracing_subscriber::{EnvFilter, Registry};
 
 pub const SENDING_QUEUE_SIZE: usize = 10;
 
-// todo: what is a good size here?
+//
+// todo: these constants should be configurable
+
 pub const LOGS_QUEUE_SIZE: usize = 50;
+
+pub const FLUSH_PIPELINE_TIMEOUT_MILLIS: u64 = 500;
+pub const FLUSH_EXPORTERS_TIMEOUT_MILLIS: u64 = 3_000;
 
 #[derive(Debug, Parser)]
 #[command(name = "rotel-lambda-extension")]
@@ -174,12 +183,15 @@ async fn run_extension(
         Err(e) => return Err(format!("Failed to register extension: {}", e).into()),
     };
 
+    let (mut flush_pipeline_tx, flush_pipeline_sub) = FlushBroadcast::new().into_parts();
+    let (mut flush_exporters_tx, flush_exporters_sub) = FlushBroadcast::new().into_parts();
+
     let agent_cancel = CancellationToken::new();
     {
         let mut agent_args = agent_args;
 
-        // Ensure this is set low
-        agent_args.otlp_exporter.otlp_exporter_batch_timeout = "200ms".parse().unwrap();
+        // We control flushing manually, so set this to zero to disable the batch timer
+        agent_args.otlp_exporter.otlp_exporter_batch_timeout = "0s".parse().unwrap();
 
         if agent_args.exporter == Exporter::Otlp {
             if agent_args.otlp_exporter.otlp_exporter_endpoint.is_none()
@@ -203,21 +215,13 @@ async fn run_extension(
             }
         }
 
-        let agent = Agent::default();
-        let env = env.clone();
+        let agent = Agent::new(agent_args, port_map, SENDING_QUEUE_SIZE, env.clone())
+            .with_logs_rx(logs_rx)
+            .with_pipeline_flush(flush_pipeline_sub)
+            .with_exporters_flush(flush_exporters_sub);
         let token = agent_cancel.clone();
-        let agent_fut = async move {
-            agent
-                .run(
-                    agent_args,
-                    port_map,
-                    SENDING_QUEUE_SIZE,
-                    env,
-                    token,
-                    Some(logs_rx),
-                )
-                .await
-        };
+        let agent_fut = async move { agent.run(token).await };
+
         agent_join_set.spawn(agent_fut);
     };
 
@@ -239,6 +243,11 @@ async fn run_extension(
         tapi_join_set.spawn(telemetry_fut)
     };
 
+    // Set up our global flush interval, will be reset when we flush periodically
+    let mut default_flush_interval =
+        tokio::time::interval(Duration::from_millis(DEFAULT_FLUSH_INTERVAL_MILLIS));
+    default_flush_interval.tick().await; // first tick is instant
+
     info!(
         "Rotel Lambda Extension started in {}ms",
         start_time.elapsed().as_millis()
@@ -249,43 +258,129 @@ async fn run_extension(
         Ok(evt) => evt,
         Err(e) => return Err(format!("Failed to read next event: {}", e).into()),
     };
-
     handle_next_response(next_evt);
-    loop {
-        'inner: loop {
-            select! {
-                msg = bus_rx.next() => {
-                    if let Some(evt) = msg {
-                        if let LambdaTelemetryRecord::PlatformRuntimeDone {..} = evt.record {
-                            break 'inner;
+
+    let mut flush_control = FlushControl::new(SystemClock {});
+
+    'outer: loop {
+        let mode = flush_control.pick();
+        let should_shutdown;
+
+        match mode {
+            FlushMode::AfterCall => {
+                'inner: loop {
+                    //
+                    // We must flush after every invocation
+                    //
+                    select! {
+                        msg = bus_rx.next() => {
+                            if let Some(evt) = msg {
+                                if let LambdaTelemetryRecord::PlatformRuntimeDone {..} = evt.record {
+                                    break 'inner;
+                                }
+                            }
+                        },
+                        e = wait::wait_for_any_task(&mut tapi_join_set) => {
+                            match e {
+                                Ok(()) => warn!("Unexpected early exit of TelemetryAPI."),
+                                Err(e) => return Err(e),
+                            }
+                        },
+                        e = wait::wait_for_any_task(&mut agent_join_set) => {
+                            match e {
+                                Ok(()) => warn!("Unexpected early exit of extension."),
+                                Err(e) => return Err(e),
+                            }
+                        },
+                        _ = default_flush_interval.tick() => {
+                            force_flush(&mut flush_pipeline_tx, &mut flush_exporters_tx, &mut default_flush_interval).await;
                         }
                     }
-                },
-                e = wait::wait_for_any_task(&mut tapi_join_set) => {
-                    match e {
-                        Ok(()) => warn!("Unexpected early exit of TelemetryAPI."),
-                        Err(e) => return Err(e),
+                }
+
+                //
+                // Force a flush
+                //
+                force_flush(
+                    &mut flush_pipeline_tx,
+                    &mut flush_exporters_tx,
+                    &mut default_flush_interval,
+                )
+                .await;
+
+                info!("Received a platform runtime done message, invoking next request");
+                let next_evt =
+                    match lambda::api::next_request(client.clone(), &r.extension_id).await {
+                        Ok(evt) => evt,
+                        Err(e) => return Err(format!("Failed to read next event: {}", e).into()),
+                    };
+
+                should_shutdown = handle_next_response(next_evt);
+            }
+            FlushMode::Periodic(mut control) => {
+                // Check if we need to force a flush, this should happen concurrently with the
+                // function invocation.
+                if control.should_flush() {
+                    force_flush(
+                        &mut flush_pipeline_tx,
+                        &mut flush_exporters_tx,
+                        &mut default_flush_interval,
+                    )
+                    .await;
+                }
+
+                let next_event_fut = lambda::api::next_request(client.clone(), &r.extension_id);
+                pin!(next_event_fut);
+
+                'periodic_inner: loop {
+                    select! {
+                        biased;
+
+                        next_resp = &mut next_event_fut => {
+                            // Reset the default flush timer on invocation, since we are checking whether to flush
+                            // at the top of the invocation anyways
+                            default_flush_interval.reset();
+
+                            match next_resp {
+                                Err(e) => return Err(format!("Failed to read next event: {}", e).into()),
+                                Ok(next_evt) => {
+                                    should_shutdown = handle_next_response(next_evt);
+
+                                    break 'periodic_inner;
+                                }
+
+                            }
+                        }
+
+                        _ = bus_rx.next() => {
+                            // Mostly ignore these here for now
+                        },
+
+                        e = wait::wait_for_any_task(&mut tapi_join_set) => {
+                            match e {
+                                Ok(()) => warn!("Unexpected early exit of TelemetryAPI."),
+                                Err(e) => return Err(e),
+                            }
+                        },
+
+                        e = wait::wait_for_any_task(&mut agent_join_set) => {
+                            match e {
+                                Ok(()) => warn!("Unexpected early exit of extension."),
+                                Err(e) => return Err(e),
+                            }
+                        },
+
+                        _ = default_flush_interval.tick() => {
+                            force_flush(&mut flush_pipeline_tx, &mut flush_exporters_tx, &mut default_flush_interval).await;
+                        }
                     }
-                },
-                e = wait::wait_for_any_task(&mut agent_join_set) => {
-                    match e {
-                        Ok(()) => warn!("Unexpected early exit of extension."),
-                        Err(e) => return Err(e),
-                    }
-                },
+                }
             }
         }
 
-        // todo: this is where we would force a flush
-        info!("Received a platform runtime done message, invoking next request");
-        let next_evt = match lambda::api::next_request(client.clone(), &r.extension_id).await {
-            Ok(evt) => evt,
-            Err(e) => return Err(format!("Failed to read next event: {}", e).into()),
-        };
-
-        if handle_next_response(next_evt) {
-            info!("shutdown received, exiting");
-            break;
+        if should_shutdown {
+            info!("Shutdown received, exiting");
+            break 'outer;
         }
     }
 
@@ -302,6 +397,53 @@ async fn run_extension(
     wait::wait_for_tasks_with_deadline(&mut agent_join_set, final_stop).await?;
 
     Ok(())
+}
+
+async fn force_flush(
+    pipeline_tx: &mut FlushSender,
+    exporters_tx: &mut FlushSender,
+    default_flush: &mut Interval,
+) {
+    let start = Instant::now();
+    match timeout(
+        Duration::from_millis(FLUSH_PIPELINE_TIMEOUT_MILLIS),
+        pipeline_tx.broadcast(),
+    )
+    .await
+    {
+        Err(_) => {
+            warn!("timeout waiting to flush pipelines");
+            return;
+        }
+        Ok(Err(e)) => {
+            warn!("failed to flush pipelines: {}", e);
+            return;
+        }
+        _ => {}
+    }
+    let duration = Instant::now().duration_since(start);
+    info!(?duration, "finished flushing pipeline");
+
+    let start = Instant::now();
+    match timeout(
+        Duration::from_millis(FLUSH_EXPORTERS_TIMEOUT_MILLIS),
+        exporters_tx.broadcast(),
+    )
+    .await
+    {
+        Err(_) => {
+            warn!("timeout waiting to flush exporters");
+            return;
+        }
+        Ok(Err(e)) => {
+            warn!("failed to flush exporters: {}", e);
+            return;
+        }
+        _ => {}
+    }
+    let duration = Instant::now().duration_since(start);
+    info!(?duration, "finished flushing exporters");
+    default_flush.reset();
 }
 
 fn handle_next_response(evt: NextEvent) -> bool {
@@ -390,5 +532,17 @@ mod test {
         tf.flush().unwrap();
 
         tf
+    }
+}
+
+#[derive(Clone)]
+struct SystemClock;
+
+impl Clock for SystemClock {
+    fn now(&self) -> u64 {
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_millis() as u64
     }
 }
