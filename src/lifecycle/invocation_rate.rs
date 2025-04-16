@@ -1,4 +1,3 @@
-
 // If we didn't execute for 5mins, reset
 const RESET_LENGTH_MILLIS: u64 = 300 * 1_000;
 
@@ -17,7 +16,7 @@ impl InvocationRate {
     pub fn add(&mut self, now_millis: u64) {
         // invalid, discard
         if now_millis <= self.last_time_millis {
-            return
+            return;
         }
 
         let delta_millis = now_millis - self.last_time_millis;
@@ -35,7 +34,7 @@ impl InvocationRate {
             self.value = delta_millis as f64;
             self.last_time_millis = now_millis;
             self.count = 1;
-            return
+            return;
         }
 
         let delta_millis = delta_millis as f64;
@@ -50,7 +49,7 @@ impl InvocationRate {
     pub fn is_faster_than(&self, rate_millis: u64) -> Option<bool> {
         // not ready
         if self.count < WARMUP_COUNT {
-            return None
+            return None;
         }
 
         Some((self.value as u64) < rate_millis)

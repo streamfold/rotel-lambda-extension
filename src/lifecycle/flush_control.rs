@@ -88,8 +88,8 @@ impl<C: Clock + Clone> FlushControl<C> {
                 // immediately attempt a flush because last_flush hasn't been updated
                 let mut g = self.inner.lock().unwrap();
                 g.last_flush = now_millis;
-            },
-            _ => {},
+            }
+            _ => {}
         }
 
         mode
@@ -110,7 +110,9 @@ mod tests {
 
     impl TestClock {
         fn new(initial_time: u64) -> Self {
-            Self { time: Rc::new(Cell::new(initial_time)) }
+            Self {
+                time: Rc::new(Cell::new(initial_time)),
+            }
         }
 
         fn advance(&self, millis: u64) {
@@ -131,7 +133,7 @@ mod tests {
 
         // Initially, we should get AfterCall mode since InvocationRate isn't warmed up
         match flush_control.pick() {
-            FlushMode::AfterCall => {},
+            FlushMode::AfterCall => {}
             _ => panic!("Expected AfterCall mode initially"),
         }
     }
@@ -149,13 +151,13 @@ mod tests {
             // During warmup, we should still get AfterCall
             if i < 20 {
                 match mode {
-                    FlushMode::AfterCall => {},
+                    FlushMode::AfterCall => {}
                     _ => panic!("Expected AfterCall mode during warmup"),
                 }
             } else {
                 // After warmup with slow invocations, we should still get AfterCall
                 match mode {
-                    FlushMode::AfterCall => {},
+                    FlushMode::AfterCall => {}
                     _ => panic!("Expected AfterCall mode for slow invocations"),
                 }
             }
@@ -175,7 +177,7 @@ mod tests {
 
         // One more pick() after warmup should give us Periodic mode
         match flush_control.pick() {
-            FlushMode::Periodic(_) => {},
+            FlushMode::Periodic(_) => {}
             _ => panic!("Expected Periodic mode for fast invocations"),
         }
     }
@@ -193,7 +195,7 @@ mod tests {
 
         // Should be in Periodic mode now
         match flush_control.pick() {
-            FlushMode::Periodic(_) => {},
+            FlushMode::Periodic(_) => {}
             _ => panic!("Expected to be in Periodic mode"),
         }
 
