@@ -38,7 +38,7 @@ for example `v12-alpha` should use `12` as the version.
 
 The Rotel Lambda layer can be used alongside the language support extension layers, found [here](https://github.com/open-telemetry/opentelemetry-lambda?tab=readme-ov-file#extension-layer-language-support). The default Rotel OTLP receiver configuration matches the defaults used for OTEL auto-instrumentation.
 
-To use a language layer, pick the extension layer ARN that matches your runtime language and include it in additional to the Rotel layer ARN above. Consult the documentation for each language layer to identify how to set `AWS_LAMBDA_EXEC_WRAPPER` so that your code is auto-instrumented on start up.
+To use a language layer, pick the extension layer ARN that matches your runtime language and include it **in addition** to the Rotel layer ARN above. You will need to set `AWS_LAMBDA_EXEC_WRAPPER` so that your code is auto-instrumented on start up. Make sure to consult the documentation for your instrumentation layer.
 
 ## Configuration
 
@@ -71,6 +71,16 @@ By default, AWS Lambda will send all Lambda logs to Amazon CloudWatch. To reduce
    - if you are using a custom policy, edit the policy to remove `logs:*` actions
    - if you are using an AWS Managed policy, like `AWSLambdaBasicExecutionRole`, remove it from the role
 6. Save the role and your next execution should not send logs to CloudWatch
+
+### Adaptive Flushing
+
+This extension uses an **adaptive flushing model**, similar to the one implemented in [Datadog's new Rust Lambda extension](https://www.datadoghq.com/blog/engineering/datadog-lambda-extension-rust/).
+
+On the initial invocation after a cold start, the extension flushes all telemetry data **at the end** of each function invocation. This ensures minimal delay in telemetry availability. However, because the flush happens *after* the invocation completes, it can slightly increase the billed duration of the function.
+
+If the extension detects a regular invocation pattern—such as invocations occurring at least once per minute—it will switch to **periodic flushing at the start** of each invocation. This overlaps the flush operation with the function’s execution time, reducing the likelihood of added billed duration due to telemetry flushing.
+
+For long-running invocations, a **global backup timer** is used to flush telemetry periodically. This timer is reset whenever a regular flush occurs, ensuring that telemetry is still sent even if invocation patterns become irregular.
 
 ## Community
 

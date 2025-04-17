@@ -31,7 +31,7 @@ use tokio::time::{Instant, Interval, timeout};
 use tokio::{pin, select};
 use tokio_util::sync::CancellationToken;
 use tower_http::BoxError;
-use tracing::{error, info, warn};
+use tracing::{debug, error, info, warn};
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::{EnvFilter, Registry};
 
@@ -308,7 +308,7 @@ async fn run_extension(
                 )
                 .await;
 
-                info!("Received a platform runtime done message, invoking next request");
+                debug!("Received a platform runtime done message, invoking next request");
                 let next_evt =
                     match lambda::api::next_request(client.clone(), &r.extension_id).await {
                         Ok(evt) => evt,
@@ -422,7 +422,7 @@ async fn force_flush(
         _ => {}
     }
     let duration = Instant::now().duration_since(start);
-    info!(?duration, "finished flushing pipeline");
+    debug!(?duration, "finished flushing pipeline");
 
     let start = Instant::now();
     match timeout(
@@ -442,13 +442,13 @@ async fn force_flush(
         _ => {}
     }
     let duration = Instant::now().duration_since(start);
-    info!(?duration, "finished flushing exporters");
+    debug!(?duration, "finished flushing exporters");
     default_flush.reset();
 }
 
 fn handle_next_response(evt: NextEvent) -> bool {
     match evt {
-        NextEvent::Invoke(invoke) => info!("Received an invoke request: {:?}", invoke),
+        NextEvent::Invoke(invoke) => debug!("Received an invoke request: {:?}", invoke),
         NextEvent::Shutdown(_) => return true,
     }
 

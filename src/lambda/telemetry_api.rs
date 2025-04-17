@@ -28,7 +28,7 @@ use std::task::{Context, Poll};
 use std::time::{Duration, Instant};
 use tokio_util::sync::CancellationToken;
 use tower::{BoxError, Service, ServiceBuilder};
-use tracing::{error, info, warn};
+use tracing::{debug, error, info, warn};
 
 // We don't want to create a logging loop, so limit how often we log
 // failures in certain code paths that may loop.
@@ -210,7 +210,7 @@ where
             }
             _ => {
                 // Keep this for debugging for now
-                info!("received telemetry event from lambda: {:?}", event);
+                debug!("received telemetry event from lambda: {:?}", event);
             }
         }
 
