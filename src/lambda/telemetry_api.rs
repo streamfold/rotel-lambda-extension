@@ -28,7 +28,7 @@ use std::task::{Context, Poll};
 use std::time::{Duration, Instant};
 use tokio_util::sync::CancellationToken;
 use tower::{BoxError, Service, ServiceBuilder};
-use tracing::{debug, error, info, warn};
+use tracing::{debug, error, warn};
 
 // We don't want to create a logging loop, so limit how often we log
 // failures in certain code paths that may loop.
