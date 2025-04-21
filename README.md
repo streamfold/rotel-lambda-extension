@@ -72,7 +72,7 @@ By default, AWS Lambda will send all Lambda logs to Amazon CloudWatch. To reduce
    - if you are using an AWS Managed policy, like `AWSLambdaBasicExecutionRole`, remove it from the role
 6. Save the role and your next execution should not send logs to CloudWatch
 
-### Adaptive Flushing
+## Adaptive Flushing
 
 This extension uses an **adaptive flushing model**, similar to the one implemented in [Datadog's new Rust Lambda extension](https://www.datadoghq.com/blog/engineering/datadog-lambda-extension-rust/).
 
