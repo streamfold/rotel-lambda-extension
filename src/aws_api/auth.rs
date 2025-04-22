@@ -4,11 +4,12 @@ use chrono::{DateTime, Utc};
 use hmac::{Hmac, Mac};
 use http::header::{AUTHORIZATION, HOST};
 use http::request::Builder;
-use http::{HeaderValue, Request};
+use http::{HeaderMap, HeaderValue, Method, Request, Uri};
 use http_body_util::Full;
 use sha2::Digest;
 use sha2::Sha256;
 use std::str;
+use tracing::info;
 
 type HmacSha256 = Hmac<Sha256>;
 
@@ -41,19 +42,20 @@ impl<'a> AwsRequestSigner<'a> {
 
     pub fn sign(
         &self,
-        mut req_builder: Builder,
-        payload: &[u8],
+        uri: Uri,
+        method: Method,
+        headers: HeaderMap,
+        payload: Vec<u8>,
     ) -> Result<Request<Full<Bytes>>, Error> {
         let amz_date = self.time.format("%Y%m%dT%H%M%SZ").to_string();
         let date_stamp = self.time.format("%Y%m%d").to_string();
 
-        let uri_ref = req_builder.uri_ref().unwrap();
-        let host = uri_ref.host().unwrap();
+        let host = uri.host().unwrap();
 
         // Add host header if it doesn't exist
-        let mut headers_mut = req_builder.headers_mut().unwrap();
+        let mut headers_mut = headers;
         if !headers_mut.contains_key(HOST) {
-            let port = uri_ref.port();
+            let port = uri.port();
             let host_value = if let Some(port) = port {
                 format!("{}:{}", host, port)
             } else {
@@ -84,33 +86,41 @@ impl<'a> AwsRequestSigner<'a> {
         );
 
         // Step 1: Create canonical request
-        let canonical_uri = uri_ref.path();
+        let canonical_uri = uri.path();
 
-        // Collect and sort query parameters
-        let mut query_params: Vec<(String, String)> = uri_ref
-            .path_and_query()
-            .unwrap()
-            .query()
-            .unwrap_or("")
-            .split("&")
-            .map(|s| {
-                let splits: Vec<&str> = s.splitn(2, "=").collect();
-                if splits.len() > 1 {
-                    (splits[0], splits[1])
-                } else {
-                    (splits[0], "")
-                }
-            })
-            .map(|(k, v)| (k.to_string(), v.to_string()))
-            .collect();
-        query_params.sort();
+        let query = uri.path_and_query().unwrap().query();
+        let canonical_querystring = match query {
+            None => "".to_string(),
+            Some(q) => {
+                // Collect and sort query parameters
+                let mut query_params: Vec<(String, String)> = uri
+                    .path_and_query()
+                    .unwrap()
+                    .query()
+                    .unwrap_or("")
+                    .split("&")
+                    .map(|s| {
+                        let splits: Vec<&str> = s.splitn(2, "=").collect();
+                        if splits.len() > 1 {
+                            (splits[0], splits[1])
+                        } else {
+                            (splits[0], "")
+                        }
+                    })
+                    .map(|(k, v)| (k.to_string(), v.to_string()))
+                    .collect();
+                query_params.sort();
 
-        let canonical_querystring = query_params
-            .iter()
-            .map(|(k, v)| format!("{}={}", k, v))
-            .collect::<Vec<String>>()
-            .join("&");
+                let canonical_querystring = query_params
+                    .iter()
+                    .map(|(k, v)| format!("{}={}", k, v))
+                    .collect::<Vec<String>>()
+                    .join("&");
 
+                canonical_querystring
+            }
+        };
+        
         // Get and sort headers
         let mut canonical_headers = String::new();
         let mut signed_headers = Vec::new();
@@ -132,20 +142,20 @@ impl<'a> AwsRequestSigner<'a> {
         }
 
         let signed_headers_str = signed_headers.join(";");
-
+        
         // Calculate payload hash
-        let payload_hash = hex::encode(Sha256::digest(payload));
+        let payload_hash = hex::encode(Sha256::digest(&payload));
 
         let canonical_request = format!(
             "{}\n{}\n{}\n{}\n{}\n{}",
-            req_builder.method_ref().unwrap(),
+            method,
             canonical_uri,
             canonical_querystring,
             canonical_headers,
             signed_headers_str,
             payload_hash
         );
-
+        
         // Step 2: Create the string to sign
         let algorithm = "AWS4-HMAC-SHA256";
         let credential_scope = format!(
@@ -174,14 +184,15 @@ impl<'a> AwsRequestSigner<'a> {
                 .map_err(|_| Error::SignatureError("Invalid authorization header".to_string()))?,
         );
 
-        // Content-Type needed for POST requests
-        // if request.method() == reqwest::Method::POST && !request.headers().contains_key(header::CONTENT_TYPE) {
-        //     request.headers_mut().insert(
-        //         header::CONTENT_TYPE,
-        //         header::HeaderValue::from_static("application/x-amz-json-1.1"),
-        //     );
-        // }
-
+        let mut req_builder = Request::builder()
+            .uri(uri)
+            .method(method);
+        
+        let builder_headers = req_builder.headers_mut().unwrap();
+        for (k, v) in headers_mut.iter() {
+            builder_headers.insert(k, v.clone());
+        }
+        
         Ok(req_builder
             .body(Full::from(Bytes::from(payload)))
             .map_err(|e| Error::RequestBuildError(e))?)

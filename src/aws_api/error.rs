@@ -1,9 +1,12 @@
 use std::fmt;
+use http::uri::InvalidUri;
 use tower::BoxError;
+use url::ParseError;
 
 #[derive(Debug)]
 pub enum Error {
     ArnParseError(String),
+    UriParseError(InvalidUri),
     RequestBuildError(http::Error),
     HttpError(hyper_util::client::legacy::Error),
     HttpResponseError(hyper::Error),
@@ -23,12 +26,19 @@ impl fmt::Display for Error {
             Error::ArnParseError(arn) => write!(f, "Invalid ARN: {}", arn),
             Error::HttpError(e) => write!(f, "HTTP error: {}", e),
             Error::HttpResponseError(e) => write!(f, "Failed to parse HTTP response: {}", e),
-            Error::HttpResponseErrorParse(e) => write!(f, "Failed to parse HTTP response: {}", e)
+            Error::HttpResponseErrorParse(e) => write!(f, "Failed to parse HTTP response: {}", e),
+            Error::UriParseError(e) => write!(f, "Unable to parse endpoint url: {}", e)
         }
     }
 }
 
 impl std::error::Error for Error {}
+
+impl From<InvalidUri> for Error {
+    fn from(err: InvalidUri) -> Self {
+        Error::UriParseError(err)
+    }
+}
 
 impl From<BoxError> for Error {
     fn from(err: BoxError) -> Self {
