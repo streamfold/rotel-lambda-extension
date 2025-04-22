@@ -1,5 +1,4 @@
 use crate::aws_api::error::Error;
-use crate::aws_api::error::Error::ArnParseError;
 use std::str::FromStr;
 
 pub(crate) struct AwsArn {

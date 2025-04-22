@@ -1,6 +1,5 @@
 use crate::aws_api::config::AwsConfig;
 use crate::aws_api::error::Error;
-use crate::aws_api::error::Error::{HttpError, HttpResponseError, RequestBuildError};
 use crate::aws_api::secretsmanager::SecretsManager;
 use crate::util::http::response_string;
 use bytes::Bytes;

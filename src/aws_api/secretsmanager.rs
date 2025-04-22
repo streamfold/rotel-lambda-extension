@@ -1,22 +1,23 @@
-use serde::{Deserialize, Serialize};
-use serde_json::json;
-use http::{HeaderMap, HeaderValue, Method, Request, Uri};
-use http::header::CONTENT_TYPE;
 use crate::aws_api::arn::AwsArn;
 use crate::aws_api::auth::{AwsRequestSigner, SystemClock};
 use crate::aws_api::client::AwsClient;
 use crate::aws_api::error::Error;
+use http::header::CONTENT_TYPE;
+use http::{HeaderMap, HeaderValue, Method, Uri};
+use serde::Deserialize;
+use serde_json::json;
 
 pub struct SecretsManager<'a> {
     client: &'a AwsClient,
     service_name: &'static str,
-    api_version: &'static str,
 }
 
 #[derive(Debug, Deserialize)]
 pub struct GetSecretValueResponse {
-    pub ARN: Option<String>,
-    pub Name: Option<String>,
+    #[serde(rename = "ARN")]
+    pub arn: Option<String>,
+    #[serde(rename = "Name")]
+    pub name: Option<String>,
     #[serde(rename = "VersionId")]
     pub version_id: Option<String>,
     #[serde(rename = "SecretString")]
@@ -34,11 +35,13 @@ impl<'a> SecretsManager<'a> {
         Self {
             client,
             service_name: "secretsmanager",
-            api_version: "2017-10-17",
         }
     }
 
-    pub async fn get_secret_value(&self, secret_arn: &str) -> Result<GetSecretValueResponse, Error> {
+    pub async fn get_secret_value(
+        &self,
+        secret_arn: &str,
+    ) -> Result<GetSecretValueResponse, Error> {
         let arn = secret_arn.parse::<AwsArn>()?;
 
         if arn.service != self.service_name {
@@ -54,8 +57,14 @@ impl<'a> SecretsManager<'a> {
         let payload_bytes = serde_json::to_vec(&payload)?;
 
         let mut hdrs = HeaderMap::new();
-        hdrs.insert("X-Amz-Target", HeaderValue::from_static("secretsmanager.GetSecretValue"));
-        hdrs.insert(CONTENT_TYPE, HeaderValue::from_static("application/x-amz-json-1.1"));
+        hdrs.insert(
+            "X-Amz-Target",
+            HeaderValue::from_static("secretsmanager.GetSecretValue"),
+        );
+        hdrs.insert(
+            CONTENT_TYPE,
+            HeaderValue::from_static("application/x-amz-json-1.1"),
+        );
 
         // Sign the request
         let signer = AwsRequestSigner::new(
@@ -64,7 +73,7 @@ impl<'a> SecretsManager<'a> {
             &self.client.config.aws_access_key_id,
             &self.client.config.aws_secret_access_key,
             self.client.config.aws_session_token.as_deref(),
-            SystemClock{},
+            SystemClock {},
         );
         let signed_request = signer.sign(endpoint, Method::POST, hdrs, payload_bytes)?;
 
@@ -79,9 +88,9 @@ impl<'a> SecretsManager<'a> {
 
 #[cfg(test)]
 mod tests {
-    use std::sync::Once;
-    use crate::aws_api::config::AwsConfig;
     use super::*;
+    use crate::aws_api::config::AwsConfig;
+    use std::sync::Once;
 
     #[tokio::test]
     async fn test_basic_secret_retrieval() {
@@ -90,10 +99,11 @@ mod tests {
         let test_secret_arns = std::env::var("TEST_SECRETSMANAGER_ARNS");
         if !test_secret_arns.is_ok() {
             println!("Skipping test_basic_secret_retrieval due to unset envvar");
-            return
+            return;
         }
 
-        let test_arns : Vec<(String, String)> = test_secret_arns.unwrap()
+        let test_arns: Vec<(String, String)> = test_secret_arns
+            .unwrap()
             .split(",")
             .filter(|s| !s.is_empty())
             .filter_map(|pair| {
@@ -108,12 +118,7 @@ mod tests {
 
         init_crypto();
 
-        let client = AwsClient::new(AwsConfig{
-            region: "us-east-2".to_string(),
-            aws_access_key_id: std::env::var("AWS_ACCESS_KEY_ID").unwrap(),
-            aws_secret_access_key: std::env::var("AWS_SECRET_ACCESS_KEY").unwrap(),
-            aws_session_token: Some(std::env::var("AWS_SESSION_TOKEN").unwrap()),
-        }).unwrap();
+        let client = AwsClient::new(AwsConfig::from_env()).unwrap();
 
         let ss = client.secrets_manager();
 
@@ -132,5 +137,4 @@ mod tests {
                 .unwrap()
         });
     }
-
 }

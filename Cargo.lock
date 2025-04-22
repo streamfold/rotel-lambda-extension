@@ -517,8 +517,6 @@ dependencies = [
 [[package]]
 name = "dotenvy"
 version = "0.15.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1aaf95b3e5c8f23aa320147307562d361db0ae0d51242340f558153b4eb2439b"
 
 [[package]]
 name = "dunce"
@@ -1800,7 +1798,7 @@ dependencies = [
 [[package]]
 name = "rotel"
 version = "0.0.1-alpha1"
-source = "git+https://github.com/streamfold/rotel?rev=13d3f8a54b671aa73f1e9ca1f82134364f6c99c6#13d3f8a54b671aa73f1e9ca1f82134364f6c99c6"
+source = "git+https://github.com/streamfold/rotel?rev=7a6a8ee527cdad965682ebb20b7160999ab114d1#7a6a8ee527cdad965682ebb20b7160999ab114d1"
 dependencies = [
  "bytes",
  "clap",
@@ -1864,6 +1862,7 @@ dependencies = [
  "lambda-extension",
  "opentelemetry-proto",
  "opentelemetry-semantic-conventions",
+ "regex",
  "rotel",
  "rustls",
  "serde",

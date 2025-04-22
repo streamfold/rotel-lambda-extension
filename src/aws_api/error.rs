@@ -1,7 +1,6 @@
 use std::fmt;
 use http::uri::InvalidUri;
 use tower::BoxError;
-use url::ParseError;
 
 #[derive(Debug)]
 pub enum Error {

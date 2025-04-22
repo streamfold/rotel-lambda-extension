@@ -109,11 +109,7 @@ where
             None => "".to_string(),
             Some(q) => {
                 // Collect and sort query parameters
-                let mut query_params: Vec<(String, String)> = uri
-                    .path_and_query()
-                    .unwrap()
-                    .query()
-                    .unwrap_or("")
+                let mut query_params: Vec<(String, String)> = q
                     .split("&")
                     .map(|s| {
                         let splits: Vec<&str> = s.splitn(2, "=").collect();

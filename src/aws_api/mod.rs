@@ -1,6 +1,6 @@
 mod auth;
-mod client;
+pub mod client;
 mod error;
 mod secretsmanager;
-mod config;
+pub mod config;
 mod arn;
