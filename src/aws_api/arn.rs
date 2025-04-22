@@ -63,3 +63,29 @@ impl AwsArn {
         format!("https://{}.{}.{}/", self.service, self.region, domain)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_parse_arn_valid() {
+        let input = "arn:aws:secretsmanager:us-east-2:891477334659:secret:test-ohio-secret-L86lpn";
+
+        let arn = input.parse::<AwsArn>().unwrap();
+
+        assert_eq!("aws", arn.partition);
+        assert_eq!("secretsmanager", arn.service);
+        assert_eq!("us-east-2", arn.region);
+        assert_eq!("891477334659", arn.account_id);
+        assert_eq!("secret", arn.resource_type);
+        assert_eq!("test-ohio-secret-L86lpn", arn.resource_id);
+    }
+    
+    #[test]
+    fn test_parse_arn_invalid() {
+        assert!(!"arn:aws:secretsmanager:us-east-2:891477334659:secret:test-ohio-secret-L86lpn:extra".parse::<AwsArn>().is_ok());
+        assert!(!"arn:aws:secretsmanager::891477334659:secret:test-ohio-secret-L86lpn".parse::<AwsArn>().is_ok());
+        assert!(!"arn:aws:secretsmanager891477334659:secret:test-ohio-secret-L86lpn".parse::<AwsArn>().is_ok());
+    }
+}

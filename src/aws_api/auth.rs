@@ -3,32 +3,46 @@ use bytes::Bytes;
 use chrono::{DateTime, Utc};
 use hmac::{Hmac, Mac};
 use http::header::{AUTHORIZATION, HOST};
-use http::request::Builder;
 use http::{HeaderMap, HeaderValue, Method, Request, Uri};
 use http_body_util::Full;
 use sha2::Digest;
 use sha2::Sha256;
 use std::str;
-use tracing::info;
+
+pub trait Clock {
+    fn now(&self) -> DateTime<Utc>;
+}
+
+pub struct SystemClock;
+
+impl Clock for SystemClock {
+    fn now(&self) -> DateTime<Utc> {
+        Utc::now()
+    }
+}
 
 type HmacSha256 = Hmac<Sha256>;
 
-pub struct AwsRequestSigner<'a> {
+pub struct AwsRequestSigner<'a, C> {
     service: &'a str,
     region: &'a str,
     access_key: &'a str,
     secret_key: &'a str,
     session_token: Option<&'a str>,
-    time: DateTime<Utc>,
+    clock: C,
 }
 
-impl<'a> AwsRequestSigner<'a> {
+impl<'a, C> AwsRequestSigner<'a, C>
+where
+    C: Clock,
+{
     pub fn new(
         service: &'a str,
         region: &'a str,
         access_key: &'a str,
         secret_key: &'a str,
         session_token: Option<&'a str>,
+        clock: C,
     ) -> Self {
         Self {
             service,
@@ -36,7 +50,7 @@ impl<'a> AwsRequestSigner<'a> {
             access_key,
             secret_key,
             session_token,
-            time: Utc::now(),
+            clock,
         }
     }
 
@@ -47,8 +61,10 @@ impl<'a> AwsRequestSigner<'a> {
         headers: HeaderMap,
         payload: Vec<u8>,
     ) -> Result<Request<Full<Bytes>>, Error> {
-        let amz_date = self.time.format("%Y%m%dT%H%M%SZ").to_string();
-        let date_stamp = self.time.format("%Y%m%d").to_string();
+        let now = self.clock.now();
+
+        let amz_date = now.format("%Y%m%dT%H%M%SZ").to_string();
+        let date_stamp = now.format("%Y%m%d").to_string();
 
         let host = uri.host().unwrap();
 
@@ -120,7 +136,7 @@ impl<'a> AwsRequestSigner<'a> {
                 canonical_querystring
             }
         };
-        
+
         // Get and sort headers
         let mut canonical_headers = String::new();
         let mut signed_headers = Vec::new();
@@ -142,7 +158,7 @@ impl<'a> AwsRequestSigner<'a> {
         }
 
         let signed_headers_str = signed_headers.join(";");
-        
+
         // Calculate payload hash
         let payload_hash = hex::encode(Sha256::digest(&payload));
 
@@ -155,7 +171,7 @@ impl<'a> AwsRequestSigner<'a> {
             signed_headers_str,
             payload_hash
         );
-        
+
         // Step 2: Create the string to sign
         let algorithm = "AWS4-HMAC-SHA256";
         let credential_scope = format!(
@@ -187,12 +203,12 @@ impl<'a> AwsRequestSigner<'a> {
         let mut req_builder = Request::builder()
             .uri(uri)
             .method(method);
-        
+
         let builder_headers = req_builder.headers_mut().unwrap();
         for (k, v) in headers_mut.iter() {
             builder_headers.insert(k, v.clone());
         }
-        
+
         Ok(req_builder
             .body(Full::from(Bytes::from(payload)))
             .map_err(|e| Error::RequestBuildError(e))?)
@@ -217,5 +233,268 @@ impl<'a> AwsRequestSigner<'a> {
             .map_err(|_| Error::SignatureError("Invalid HMAC key".to_string()))?;
         mac.update(message);
         Ok(mac.finalize().into_bytes().to_vec())
+    }
+}
+
+
+#[cfg(test)]
+mod tests {
+    use chrono::TimeZone;
+use super::*;
+    use http::header::{AUTHORIZATION, HOST};
+    use std::collections::HashMap;
+    use http_body_util::BodyExt;
+
+    struct MockClock(DateTime<Utc>);
+    impl Clock for MockClock {
+        fn now(&self) -> DateTime<Utc> {
+            self.0
+        }
+    }
+
+    // Helper function to extract headers from a signed request
+    fn extract_headers(request: &Request<Full<Bytes>>) -> HashMap<String, String> {
+        request
+            .headers()
+            .iter()
+            .map(|(name, value)| {
+                (
+                    name.to_string(),
+                    value.to_str().unwrap_or_default().to_string(),
+                )
+            })
+            .collect()
+    }
+
+    #[test]
+    fn test_sign_basic_request() {
+        // Arrange
+        let signer = AwsRequestSigner::new(
+            "s3",
+            "us-east-1",
+            "AKIAIOSFODNN7EXAMPLE",
+            "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
+            None,
+            SystemClock{},
+        );
+
+        let uri = "https://s3.amazonaws.com/test-bucket/test-object"
+            .parse::<Uri>()
+            .unwrap();
+        let method = Method::GET;
+        let headers = HeaderMap::new();
+        let payload = Vec::new(); // Empty payload for GET request
+
+        // Act
+        let signed_request = signer.sign(uri, method, headers, payload).unwrap();
+
+        // Assert
+        let headers = extract_headers(&signed_request);
+        assert!(headers.contains_key(&HOST.to_string()));
+        assert!(headers.contains_key(&"x-amz-date".to_string()));
+        assert!(headers.contains_key(&AUTHORIZATION.to_string()));
+
+        let auth_header = &headers[&AUTHORIZATION.to_string()];
+        assert!(auth_header.starts_with("AWS4-HMAC-SHA256 Credential="));
+        assert!(auth_header.contains("us-east-1/s3/aws4_request"));
+    }
+
+    #[test]
+    fn test_sign_with_query_parameters() {
+        // Arrange
+        let signer = AwsRequestSigner::new(
+            "s3",
+            "us-east-1",
+            "AKIAIOSFODNN7EXAMPLE",
+            "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
+            None,
+            SystemClock{},
+        );
+
+        let uri = "https://s3.amazonaws.com/test-bucket/test-object?prefix=test&delimiter=/"
+            .parse::<Uri>()
+            .unwrap();
+        let method = Method::GET;
+        let headers = HeaderMap::new();
+        let payload = Vec::new();
+
+        // Act
+        let signed_request = signer.sign(uri, method, headers, payload).unwrap();
+
+        // Assert
+        let headers = extract_headers(&signed_request);
+        let auth_header = &headers[&AUTHORIZATION.to_string()];
+        // The canonical query string should be included in the signature
+        assert!(auth_header.contains("SignedHeaders="));
+    }
+
+    #[test]
+    fn test_sign_with_session_token() {
+        // Arrange
+        let signer = AwsRequestSigner::new(
+            "s3",
+            "us-east-1",
+            "AKIAIOSFODNN7EXAMPLE",
+            "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
+            Some("SESSION_TOKEN_EXAMPLE"),
+            SystemClock{},
+        );
+
+        let uri = "https://s3.amazonaws.com/test-bucket/test-object"
+            .parse::<Uri>()
+            .unwrap();
+        let method = Method::GET;
+        let headers = HeaderMap::new();
+        let payload = Vec::new();
+
+        // Act
+        let signed_request = signer.sign(uri, method, headers, payload).unwrap();
+
+        // Assert
+        let headers = extract_headers(&signed_request);
+        assert_eq!(
+            headers.get("x-amz-security-token").unwrap(),
+            "SESSION_TOKEN_EXAMPLE"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_sign_with_existing_headers() {
+        // Arrange
+        let signer = AwsRequestSigner::new(
+            "s3",
+            "us-east-1",
+            "AKIAIOSFODNN7EXAMPLE",
+            "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
+            None,
+            SystemClock{},
+        );
+
+        let uri = "https://s3.amazonaws.com/test-bucket/test-object"
+            .parse::<Uri>()
+            .unwrap();
+        let method = Method::POST;
+
+        let mut headers = HeaderMap::new();
+        headers.insert("Content-Type", "application/json".parse().unwrap());
+
+        let payload = b"Hello, world!".to_vec();
+
+        // Act
+        let signed_request = signer.sign(uri, method, headers, payload).unwrap();
+
+        // Assert
+        let headers = extract_headers(&signed_request);
+        assert_eq!(headers.get("content-type").unwrap(), "application/json");
+        let auth_header = &headers[&AUTHORIZATION.to_string()];
+        assert!(auth_header.contains("content-type"));
+        let body = signed_request.into_body().collect().await.unwrap();
+
+        assert_eq!(b"Hello, world!", body.to_bytes().as_ref());
+    }
+
+    #[test]
+    fn test_sign_with_existing_host_header() {
+        // Arrange
+        let signer = AwsRequestSigner::new(
+            "s3",
+            "us-east-1",
+            "AKIAIOSFODNN7EXAMPLE",
+            "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
+            None,
+            SystemClock{},
+        );
+
+        let uri = "https://s3.amazonaws.com/test-bucket/test-object"
+            .parse::<Uri>()
+            .unwrap();
+        let method = Method::GET;
+
+        let mut headers = HeaderMap::new();
+        headers.insert(HOST, "custom-host.com".parse().unwrap());
+
+        let payload = Vec::new();
+
+        // Act
+        let signed_request = signer.sign(uri, method, headers, payload).unwrap();
+
+        // Assert
+        let headers = extract_headers(&signed_request);
+        assert_eq!(headers.get(&HOST.to_string()).unwrap(), "custom-host.com");
+    }
+
+
+    #[test]
+    fn test_with_fixed_time_full_authorization_header() {
+        // Arrange - use a fixed time to generate a deterministic signature
+        let fixed_time = Utc.with_ymd_and_hms(2023, 4, 1, 12, 0, 0).unwrap();
+
+        let signer = AwsRequestSigner::new(
+            "s3",
+            "us-east-1",
+            "AKIAIOSFODNN7EXAMPLE",
+            "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
+            None,
+            MockClock(fixed_time),
+        );
+
+        let uri = "https://s3.amazonaws.com/test-bucket/test-key"
+            .parse::<Uri>()
+            .unwrap();
+        let method = Method::GET;
+
+        // Create a fixed set of headers for deterministic results
+        let mut headers = HeaderMap::new();
+        headers.insert(HOST, "s3.amazonaws.com".parse().unwrap());
+        headers.insert("Content-Type", "application/json".parse().unwrap());
+
+        let payload = b"test-payload".to_vec();
+
+        // Act
+        let signed_request = signer.sign(uri, method, headers, payload).unwrap();
+
+        // Assert
+        let headers = extract_headers(&signed_request);
+
+        // Check the x-amz-date header matches our fixed time
+        assert_eq!(headers.get("x-amz-date").unwrap(), "20230401T120000Z");
+
+        // Verify the full Authorization header
+        // This expected value was pre-calculated based on the fixed inputs
+        let expected_auth_header = "AWS4-HMAC-SHA256 Credential=AKIAIOSFODNN7EXAMPLE/20230401/us-east-1/s3/aws4_request, SignedHeaders=content-type;host;x-amz-date, Signature=c180093fab25fabef7f4a7bf3235c704e5ba9cba022ba23045656577472c65b0";
+        let actual_auth_header = &headers[&AUTHORIZATION.to_string()];
+
+        assert_eq!(actual_auth_header, expected_auth_header);
+    }
+
+
+    #[test]
+    fn test_uri_with_port() {
+        // Arrange
+        let signer = AwsRequestSigner::new(
+            "s3",
+            "us-east-1",
+            "AKIAIOSFODNN7EXAMPLE",
+            "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
+            None,
+            SystemClock{},
+        );
+
+        let uri = "https://s3.amazonaws.com:8443/test-bucket/test-object"
+            .parse::<Uri>()
+            .unwrap();
+        let method = Method::GET;
+        let headers = HeaderMap::new();
+        let payload = Vec::new();
+
+        // Act
+        let signed_request = signer.sign(uri, method, headers, payload).unwrap();
+
+        // Assert
+        let headers = extract_headers(&signed_request);
+        assert_eq!(
+            headers.get(&HOST.to_string()).unwrap(),
+            "s3.amazonaws.com:8443"
+        );
     }
 }
