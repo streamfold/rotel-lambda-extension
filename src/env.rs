@@ -73,6 +73,7 @@ pub async fn resolve_secrets(
     let sm = client.secrets_manager();
 
     for (arn, value) in secure_arns.iter_mut() {
+        // We could look to use the BatchGetSecretValue too
         match sm.get_secret_value(arn.as_str()).await {
             Ok(resp) => {
                 if let Some(secret) = resp.secret_string {

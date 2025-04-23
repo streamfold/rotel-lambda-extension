@@ -61,7 +61,7 @@ allowing you to set the secret values in your AWS Lambda function definition and
 
 ### Secrets
 
-Secret values can be loaded from [AWS Secrets Manager](https://aws.amazon.com/secrets-manager/) by specifying the full
+Secret values can be retrieved from [AWS Secrets Manager](https://aws.amazon.com/secrets-manager/) by specifying the full
 ARN of the stored secret as the environment variable name. This allows you to keep secret values out of configuration
 files.
 

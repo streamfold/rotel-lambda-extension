@@ -11,7 +11,6 @@ use hyper_util::client::legacy::Client as HyperClient;
 use hyper_util::client::legacy::connect::HttpConnector;
 use hyper_util::rt::{TokioExecutor, TokioTimer};
 use rustls::ClientConfig;
-use std::collections::HashMap;
 use std::time::Duration;
 use tower::BoxError;
 
@@ -42,19 +41,9 @@ impl AwsClient {
         if !parts.status.is_success() {
             let error_body = response_string(body).await?;
 
-            let error_json: HashMap<String, String> = match serde_json::from_str(&error_body) {
-                Ok(json) => json,
-                Err(_) => {
-                    return Err(Error::AwsError {
-                        code: parts.status.as_str().to_string(),
-                        message: error_body,
-                    });
-                }
-            };
-
             return Err(Error::AwsError {
-                code: error_json.get("__type").cloned().unwrap_or_default(),
-                message: error_json.get("Message").cloned().unwrap_or_default(),
+                code: parts.status.as_str().to_string(),
+                message: error_body,
             });
         }
 
