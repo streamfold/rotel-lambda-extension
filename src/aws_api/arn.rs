@@ -80,11 +80,23 @@ mod tests {
         assert_eq!("secret", arn.resource_type);
         assert_eq!("test-ohio-secret-L86lpn", arn.resource_id);
     }
-    
+
     #[test]
     fn test_parse_arn_invalid() {
-        assert!(!"arn:aws:secretsmanager:us-east-2:891477334659:secret:test-ohio-secret-L86lpn:extra".parse::<AwsArn>().is_ok());
-        assert!(!"arn:aws:secretsmanager::891477334659:secret:test-ohio-secret-L86lpn".parse::<AwsArn>().is_ok());
-        assert!(!"arn:aws:secretsmanager891477334659:secret:test-ohio-secret-L86lpn".parse::<AwsArn>().is_ok());
+        assert!(
+            !"arn:aws:secretsmanager:us-east-2:891477334659:secret:test-ohio-secret-L86lpn:extra"
+                .parse::<AwsArn>()
+                .is_ok()
+        );
+        assert!(
+            !"arn:aws:secretsmanager::891477334659:secret:test-ohio-secret-L86lpn"
+                .parse::<AwsArn>()
+                .is_ok()
+        );
+        assert!(
+            !"arn:aws:secretsmanager891477334659:secret:test-ohio-secret-L86lpn"
+                .parse::<AwsArn>()
+                .is_ok()
+        );
     }
 }

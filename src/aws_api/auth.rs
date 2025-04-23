@@ -196,9 +196,7 @@ where
                 .map_err(|_| Error::SignatureError("Invalid authorization header".to_string()))?,
         );
 
-        let mut req_builder = Request::builder()
-            .uri(uri)
-            .method(method);
+        let mut req_builder = Request::builder().uri(uri).method(method);
 
         let builder_headers = req_builder.headers_mut().unwrap();
         for (k, v) in headers_mut.iter() {
@@ -232,14 +230,13 @@ where
     }
 }
 
-
 #[cfg(test)]
 mod tests {
+    use super::*;
     use chrono::TimeZone;
-use super::*;
     use http::header::{AUTHORIZATION, HOST};
-    use std::collections::HashMap;
     use http_body_util::BodyExt;
+    use std::collections::HashMap;
 
     struct MockClock(DateTime<Utc>);
     impl Clock for MockClock {
@@ -271,7 +268,7 @@ use super::*;
             "AKIAIOSFODNN7EXAMPLE",
             "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
             None,
-            SystemClock{},
+            SystemClock {},
         );
 
         let uri = "https://s3.amazonaws.com/test-bucket/test-object"
@@ -304,7 +301,7 @@ use super::*;
             "AKIAIOSFODNN7EXAMPLE",
             "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
             None,
-            SystemClock{},
+            SystemClock {},
         );
 
         let uri = "https://s3.amazonaws.com/test-bucket/test-object?prefix=test&delimiter=/"
@@ -333,7 +330,7 @@ use super::*;
             "AKIAIOSFODNN7EXAMPLE",
             "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
             Some("SESSION_TOKEN_EXAMPLE"),
-            SystemClock{},
+            SystemClock {},
         );
 
         let uri = "https://s3.amazonaws.com/test-bucket/test-object"
@@ -363,7 +360,7 @@ use super::*;
             "AKIAIOSFODNN7EXAMPLE",
             "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
             None,
-            SystemClock{},
+            SystemClock {},
         );
 
         let uri = "https://s3.amazonaws.com/test-bucket/test-object"
@@ -398,7 +395,7 @@ use super::*;
             "AKIAIOSFODNN7EXAMPLE",
             "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
             None,
-            SystemClock{},
+            SystemClock {},
         );
 
         let uri = "https://s3.amazonaws.com/test-bucket/test-object"
@@ -418,7 +415,6 @@ use super::*;
         let headers = extract_headers(&signed_request);
         assert_eq!(headers.get(&HOST.to_string()).unwrap(), "custom-host.com");
     }
-
 
     #[test]
     fn test_with_fixed_time_full_authorization_header() {
@@ -463,7 +459,6 @@ use super::*;
         assert_eq!(actual_auth_header, expected_auth_header);
     }
 
-
     #[test]
     fn test_uri_with_port() {
         // Arrange
@@ -473,7 +468,7 @@ use super::*;
             "AKIAIOSFODNN7EXAMPLE",
             "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
             None,
-            SystemClock{},
+            SystemClock {},
         );
 
         let uri = "https://s3.amazonaws.com:8443/test-bucket/test-object"

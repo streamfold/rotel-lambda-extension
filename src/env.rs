@@ -1,10 +1,10 @@
-use std::collections::HashMap;
+use crate::aws_api::client::AwsClient;
+use crate::aws_api::config::AwsConfig;
 use regex::Regex;
+use std::collections::HashMap;
 use tokio::time::Instant;
 use tower::BoxError;
 use tracing::{debug, warn};
-use crate::aws_api::client::AwsClient;
-use crate::aws_api::config::AwsConfig;
 
 pub struct EnvArnParser {
     arn_sub_re: Regex,
@@ -39,29 +39,34 @@ impl EnvArnParser {
             if !k.starts_with("ROTEL_") {
                 continue;
             }
-            
-            let result = self.arn_sub_re.replace_all(v.as_str(), |caps: &regex::Captures| {
-                let matched = caps.get(1).unwrap().as_str();
-                
-                match arn_map.get(matched) {
-                    None => "",
-                    Some(v) => v,
-                }
-            }).into_owned();
+
+            let result = self
+                .arn_sub_re
+                .replace_all(v.as_str(), |caps: &regex::Captures| {
+                    let matched = caps.get(1).unwrap().as_str();
+
+                    match arn_map.get(matched) {
+                        None => "",
+                        Some(v) => v,
+                    }
+                })
+                .into_owned();
 
             if v != result {
                 updates.insert(k, result);
             }
         }
-        
+
         for (k, v) in updates {
-            unsafe{std::env::set_var(k, v.to_string())}
+            unsafe { std::env::set_var(k, v.to_string()) }
         }
-        
     }
 }
 
-pub async fn resolve_secrets(aws_config: &AwsConfig, secure_arns: &mut HashMap<String, String>) -> Result<(), BoxError> {
+pub async fn resolve_secrets(
+    aws_config: &AwsConfig,
+    secure_arns: &mut HashMap<String, String>,
+) -> Result<(), BoxError> {
     let secrets_start = Instant::now();
 
     let client = AwsClient::new(aws_config.clone())?;
@@ -75,17 +80,21 @@ pub async fn resolve_secrets(aws_config: &AwsConfig, secure_arns: &mut HashMap<S
                 }
             }
             Err(err) => {
-                warn!("Unable to resolve the secrets arn {}: {}, skipping for now", arn, err);
+                warn!(
+                    "Unable to resolve the secrets arn {}: {}, skipping for now",
+                    arn, err
+                );
                 // should this be fatal?
             }
         }
     }
-    
-    debug!("Resolved all secrets in {} ms",
-            Instant::now().duration_since(secrets_start).as_millis());
+
+    debug!(
+        "Resolved all secrets in {} ms",
+        Instant::now().duration_since(secrets_start).as_millis()
+    );
     Ok(())
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -107,17 +116,20 @@ mod tests {
         assert!(hm.contains_key("arn:test2"));
         assert!(hm.contains_key("arn:test3"));
         assert!(hm.contains_key("arn:test4"));
-        
+
         hm.insert("arn:test1".to_string(), "result-1".to_string());
         hm.insert("arn:test2".to_string(), "result-2".to_string());
         hm.insert("arn:test3".to_string(), "result-3".to_string());
-        
+
         es.update_env_arn_secrets(hm);
-        
+
         assert_eq!("${SOMETHING}", std::env::var("ROTEL_DONT_EXPAND").unwrap());
         assert_eq!("result-1", std::env::var("ROTEL_SINGLE").unwrap());
         assert_eq!("result-2 - result-3", std::env::var("ROTEL_MULTI").unwrap());
-        assert_eq!("Bearer result-2", std::env::var("ROTEL_ALREADY_EXISTS").unwrap());
+        assert_eq!(
+            "Bearer result-2",
+            std::env::var("ROTEL_ALREADY_EXISTS").unwrap()
+        );
         assert_eq!("empty:", std::env::var("ROTEL_WONT_UPDATE").unwrap());
 
         unsafe { std::env::remove_var("ROTEL_DONT_EXPAND") }
@@ -126,5 +138,4 @@ mod tests {
         unsafe { std::env::remove_var("ROTEL_ALREADY_EXISTS") }
         unsafe { std::env::remove_var("ROTEL_WONT_UPDATE") }
     }
-
 }

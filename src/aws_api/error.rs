@@ -1,5 +1,5 @@
-use std::fmt;
 use http::uri::InvalidUri;
+use std::fmt;
 use tower::BoxError;
 
 #[derive(Debug)]
@@ -26,7 +26,7 @@ impl fmt::Display for Error {
             Error::HttpError(e) => write!(f, "HTTP error: {}", e),
             Error::HttpResponseError(e) => write!(f, "Failed to parse HTTP response: {}", e),
             Error::HttpResponseErrorParse(e) => write!(f, "Failed to parse HTTP response: {}", e),
-            Error::UriParseError(e) => write!(f, "Unable to parse endpoint url: {}", e)
+            Error::UriParseError(e) => write!(f, "Unable to parse endpoint url: {}", e),
         }
     }
 }

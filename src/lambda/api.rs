@@ -4,6 +4,7 @@ use crate::lambda::types::{
     RegisterResponseBody, TelemetryAPISubscribe, TelemetryAPISubscribeBuffering,
     TelemetryAPISubscribeDestination,
 };
+use crate::util::http::response_string;
 use bytes::Bytes;
 use http::header::CONTENT_TYPE;
 use http::{Method, Request};
@@ -14,7 +15,6 @@ use hyper_util::client::legacy::connect::HttpConnector;
 use lambda_extension::NextEvent;
 use std::net::SocketAddr;
 use tower::BoxError;
-use crate::util::http::response_string;
 
 pub async fn register(
     client: Client<HttpConnector, Full<Bytes>>,
