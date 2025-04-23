@@ -210,7 +210,7 @@ async fn run_extension(
     let mut secure_arns = es.extract_arns_from_env();
     if !secure_arns.is_empty() {
         if CryptoProvider::get_default().is_none() {
-            rustls::crypto::ring::default_provider()
+            rustls::crypto::aws_lc_rs::default_provider()
                 .install_default()
                 .unwrap();
         }

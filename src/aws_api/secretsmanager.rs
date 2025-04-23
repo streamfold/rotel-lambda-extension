@@ -132,7 +132,7 @@ mod tests {
     static INIT_CRYPTO: Once = Once::new();
     pub fn init_crypto() {
         INIT_CRYPTO.call_once(|| {
-            rustls::crypto::ring::default_provider()
+            rustls::crypto::aws_lc_rs::default_provider()
                 .install_default()
                 .unwrap()
         });
