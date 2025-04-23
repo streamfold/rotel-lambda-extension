@@ -59,6 +59,26 @@ ROTEL_OTLP_EXPORTER_CUSTOM_HEADERS="Authorization=Bearer ${AXIOM_API_KEY},X-Axio
 The values `${AXIOM_API_KEY}` and `${AXIOM_DATASET}` will be resolved from the environment of the function,
 allowing you to set the secret values in your AWS Lambda function definition and out of the on-disk file.
 
+### Secrets
+
+Secret values can be retrieved from [AWS Secrets Manager](https://aws.amazon.com/secrets-manager/) by specifying the full
+ARN of the stored secret as the environment variable name. This allows you to keep secret values out of configuration
+files.
+
+For example, the following env file will load the API key from the secret ARN. Ensure that your Lambda has IAM permissions
+for the [GetSecretValue](https://docs.aws.amazon.com/secretsmanager/latest/apireference/API_GetSecretValue.html) action.
+```shell
+ROTEL_OTLP_EXPORTER_ENDPOINT=https://api.axiom.co
+ROTEL_OTLP_EXPORTER_PROTOCOL=http
+ROTEL_OTLP_EXPORTER_CUSTOM_HEADERS="Authorization=Bearer ${arn:aws:secretsmanager:us-east-1:123377354456:secret:axiom-api-key-r1l7G9},X-Axiom-Dataset=${AXIOM_DATASET}"
+```
+
+_Make sure to set a plaintext secret string value for the secret. Only secrets stored in AWS Secrets Manager are supported at the moment._
+
+**NOTE**: AWS Secrets Manager API calls can increase cold start latency by 100-150 ms even when made within the same region, so be
+mindful of that impact when retrieving secrets. Secrets are only retrieved on initialization, so subsequent invocations are
+not impacted.
+
 ## Disabling CloudWatch Logs
 
 By default, AWS Lambda will send all Lambda logs to Amazon CloudWatch. To reduce costs, you may want to disable those logs if you are forwarding your logs to an external logging provider.

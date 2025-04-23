@@ -21,6 +21,10 @@ jobs:
 #            os: ubuntu
     runs-on: ${{ matrix.runner }}
 
+    permissions:
+      id-token: write
+      contents: read
+
     steps:
       - uses: actions/checkout@v4
       - name: update apt cache
@@ -31,7 +35,14 @@ jobs:
         with:
           target: ${{ matrix.target }}
           rustflags: ""
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_LAMBDA_CI_ROLE_ARN }}
+          aws-region: us-east-1
       - name: run test
+        env:
+          TEST_SECRETSMANAGER_ARNS: ${{ secrets.TEST_SECRETSMANAGER_ARNS }}
         run: |
           cargo test --target ${{ matrix.target }} --verbose
 

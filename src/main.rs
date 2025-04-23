@@ -2,6 +2,7 @@ extern crate core;
 
 use bytes::Bytes;
 use clap::{Parser, ValueEnum};
+use dotenvy::Substitutor;
 use http_body_util::Full;
 use hyper_util::client::legacy::Client;
 use hyper_util::client::legacy::connect::HttpConnector;
@@ -15,11 +16,14 @@ use rotel::init::misc::bind_endpoints;
 use rotel::init::wait;
 use rotel::listener::Listener;
 use rotel::topology::flush_control::{FlushBroadcast, FlushSender};
+use rotel_extension::aws_api::config::AwsConfig;
+use rotel_extension::env::{EnvArnParser, resolve_secrets};
 use rotel_extension::lambda;
 use rotel_extension::lambda::telemetry_api::TelemetryAPI;
 use rotel_extension::lifecycle::flush_control::{
     Clock, DEFAULT_FLUSH_INTERVAL_MILLIS, FlushControl, FlushMode,
 };
+use rustls::crypto::CryptoProvider;
 use std::collections::HashMap;
 use std::env;
 use std::net::SocketAddr;
@@ -150,9 +154,10 @@ fn load_env_file(env_file: &String) -> Result<(), BoxError> {
 
     Ok(())
 }
+
 fn load_env_file_updates(env_file: &String) -> Result<Vec<(String, String)>, BoxError> {
     let mut updates = Vec::new();
-    for item in dotenvy::from_filename_iter(env_file)
+    for item in dotenvy::from_filename_iter_custom_sub(env_file, ArnEnvSubstitutor {})
         .map_err(|e| format!("failed to open env file {}: {}", env_file, e))?
     {
         let (key, val) = item.map_err(|e| format!("unable to parse line: {}", e))?;
@@ -162,10 +167,28 @@ fn load_env_file_updates(env_file: &String) -> Result<Vec<(String, String)>, Box
     Ok(updates)
 }
 
+#[derive(Clone)]
+struct ArnEnvSubstitutor;
+impl Substitutor for ArnEnvSubstitutor {
+    fn substitute(&self, val: &str) -> Option<String> {
+        // We'll expand this later
+        if val.starts_with("arn:") {
+            // need to escape curly braces
+            return Some(format!("${{{}}}", val));
+        }
+
+        // Fall back to normal env expansion
+        match std::env::var(val) {
+            Ok(s) => Some(s),
+            Err(_) => None,
+        }
+    }
+}
+
 #[tokio::main]
 async fn run_extension(
     start_time: Instant,
-    agent_args: Box<AgentRun>,
+    mut agent_args: Box<AgentRun>,
     port_map: HashMap<SocketAddr, Listener>,
     telemetry_listener: Listener,
     env: &String,
@@ -178,6 +201,27 @@ async fn run_extension(
     let (bus_tx, mut bus_rx) = bounded(10);
     let (logs_tx, logs_rx) = bounded(LOGS_QUEUE_SIZE);
 
+    let aws_config = AwsConfig::from_env();
+
+    //
+    // Resolve secrets
+    //
+    let es = EnvArnParser::new();
+    let mut secure_arns = es.extract_arns_from_env();
+    if !secure_arns.is_empty() {
+        if CryptoProvider::get_default().is_none() {
+            rustls::crypto::aws_lc_rs::default_provider()
+                .install_default()
+                .unwrap();
+        }
+
+        resolve_secrets(&aws_config, &mut secure_arns).await?;
+        es.update_env_arn_secrets(secure_arns);
+
+        // We must reparse arguments now that the environment has been updated
+        agent_args = Arguments::parse().agent_args;
+    }
+
     let r = match lambda::api::register(client.clone()).await {
         Ok(r) => r,
         Err(e) => return Err(format!("Failed to register extension: {}", e).into()),
@@ -188,8 +232,6 @@ async fn run_extension(
 
     let agent_cancel = CancellationToken::new();
     {
-        let mut agent_args = agent_args;
-
         // We control flushing manually, so set this to zero to disable the batch timer
         agent_args.otlp_exporter.otlp_exporter_batch_timeout = "0s".parse().unwrap();
 
@@ -490,7 +532,7 @@ fn build_hyper_client() -> Client<HttpConnector, Full<Bytes>> {
 
 #[cfg(test)]
 mod test {
-    use crate::load_env_file_updates;
+    use super::*;
     use std::io::Write;
     use tempfile::NamedTempFile;
 

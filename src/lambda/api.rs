@@ -4,6 +4,7 @@ use crate::lambda::types::{
     RegisterResponseBody, TelemetryAPISubscribe, TelemetryAPISubscribeBuffering,
     TelemetryAPISubscribeDestination,
 };
+use crate::util::http::response_string;
 use bytes::Bytes;
 use http::header::CONTENT_TYPE;
 use http::{Method, Request};
@@ -92,13 +93,8 @@ pub async fn next_request(
 
     let (parts, body) = resp.into_parts();
     let status = parts.status;
-    let text = body
-        .collect()
-        .await
-        .map_err(|e| format!("Failed to read response body from {}: {}", url, e))
-        .map(|c| c.to_bytes())
-        .map(|s| String::from_utf8(s.to_vec()))?
-        .map_err(|e| format!("Unable to convert response body to string: {}", e))?;
+    let text = response_string(body).await?;
+
     if status != 200 {
         return Err(format!(
             "Runtime API next request failed at {}, returned: {}: {}",
