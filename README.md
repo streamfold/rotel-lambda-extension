@@ -73,7 +73,11 @@ ROTEL_OTLP_EXPORTER_PROTOCOL=http
 ROTEL_OTLP_EXPORTER_CUSTOM_HEADERS="Authorization=Bearer ${arn:aws:secretsmanager:us-east-1:123377354456:secret:axiom-api-key-r1l7G9},X-Axiom-Dataset=${AXIOM_DATASET}"
 ```
 
-_Make sure to set a plaintext secret string value for the secret. Only secrets stored in AWS Secrets Manager are supported at the moment._  
+_Make sure to set a plaintext secret string value for the secret. Only secrets stored in AWS Secrets Manager are supported at the moment._
+
+**NOTE**: AWS Secrets Manager API calls can increase cold start latency by 100-150 ms even when made within the same region, so be
+mindful of that impact when retrieving secrets. Secrets are only retrieved on initialization, so subsequent invocations are
+not impacted.
 
 ## Disabling CloudWatch Logs
 
