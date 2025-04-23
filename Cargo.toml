@@ -21,8 +21,7 @@ http = "1.2.0"
 clap = { version = "4.5.23", features = ["derive", "env"] }
 futures = "0.3.31"
 tower-http = { version = "0.6.2", features = ["limit", "trace", "compression-gzip", "validate-request"] }
-#dotenvy = "0.15.7"
-dotenvy = { path = "../dotenvy/dotenv" }
+dotenvy = { git = "https://github.com/streamfold/dotenvy", branch = "custom-substitution" }
 rustls = "0.23.20"
 tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }
 tracing-appender = "0.2.3"
@@ -35,7 +34,6 @@ hyper-rustls = "0.27.5"
 hmac = "0.12"
 sha2 = "0.10"
 hex = "0.4"
-url = "2.5.4"
 regex = "1.11.1"
 
 [dev-dependencies]

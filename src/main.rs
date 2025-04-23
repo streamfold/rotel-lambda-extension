@@ -188,7 +188,7 @@ impl Substitutor for ArnEnvSubstitutor {
 #[tokio::main]
 async fn run_extension(
     start_time: Instant,
-    agent_args: Box<AgentRun>,
+    mut agent_args: Box<AgentRun>,
     port_map: HashMap<SocketAddr, Listener>,
     telemetry_listener: Listener,
     env: &String,
@@ -217,6 +217,9 @@ async fn run_extension(
 
         resolve_secrets(&aws_config, &mut secure_arns).await?;
         es.update_env_arn_secrets(secure_arns);
+
+        // We must reparse arguments now that the environment has been updated
+        agent_args = Arguments::parse().agent_args;
     }
 
     let r = match lambda::api::register(client.clone()).await {
@@ -229,8 +232,6 @@ async fn run_extension(
 
     let agent_cancel = CancellationToken::new();
     {
-        let mut agent_args = agent_args;
-
         // We control flushing manually, so set this to zero to disable the batch timer
         agent_args.otlp_exporter.otlp_exporter_batch_timeout = "0s".parse().unwrap();
 

@@ -517,6 +517,7 @@ dependencies = [
 [[package]]
 name = "dotenvy"
 version = "0.15.7"
+source = "git+https://github.com/streamfold/dotenvy?branch=custom-substitution#ab3b8701189c26e0d90244c00daeb2830da807ed"
 
 [[package]]
 name = "dunce"
@@ -1876,7 +1877,6 @@ dependencies = [
  "tracing",
  "tracing-appender",
  "tracing-subscriber",
- "url",
 ]
 
 [[package]]
