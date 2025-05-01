@@ -233,7 +233,7 @@ async fn run_extension(
     let agent_cancel = CancellationToken::new();
     {
         // We control flushing manually, so set this to zero to disable the batch timer
-        agent_args.otlp_exporter.otlp_exporter_batch_timeout = "0s".parse().unwrap();
+        agent_args.batch.batch_timeout = "0s".parse().unwrap();
 
         if agent_args.exporter == Exporter::Otlp {
             if agent_args.otlp_exporter.otlp_exporter_endpoint.is_none()
