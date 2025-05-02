@@ -44,7 +44,7 @@ jobs:
         # Start with a small set of popular regions, expand as necessary.
         # Note: As we expand these we may need to pre-create the old version numbers so that the
         # latest lambda layer version matches across all regions. That is left as a TODO.
-        region: [ us-east-1, us-east-2, us-west-2 ]
+        region: [ us-east-1, us-east-2, us-west-2, eu-central-1 ]
 
     permissions:
       id-token: write
