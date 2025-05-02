@@ -25,6 +25,7 @@ The layer is deployed in the following AWS regions (if you don't see yours, let 
 - us-east-1
 - us-east-2
 - us-west-2
+- eu-central-1
 
 The layer supports the Amazon Linux 2023
 [Lambda runtime](https://docs.aws.amazon.com/lambda/latest/dg/lambda-runtimes.html#runtimes-supported)
