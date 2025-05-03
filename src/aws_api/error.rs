@@ -13,6 +13,7 @@ pub enum Error {
     SignatureError(String),
     SerdeError(serde_json::Error),
     AwsError { code: String, message: String },
+    InvalidSecrets(Vec<String>),
 }
 
 impl fmt::Display for Error {
@@ -27,6 +28,9 @@ impl fmt::Display for Error {
             Error::HttpResponseError(e) => write!(f, "Failed to parse HTTP response: {}", e),
             Error::HttpResponseErrorParse(e) => write!(f, "Failed to parse HTTP response: {}", e),
             Error::UriParseError(e) => write!(f, "Unable to parse endpoint url: {}", e),
+            Error::InvalidSecrets(params) => {
+                write!(f, "Unable to lookup secret values: {:?}", params)
+            }
         }
     }
 }

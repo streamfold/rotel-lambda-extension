@@ -9,69 +9,84 @@ use serde_json::json;
 use std::collections::HashMap;
 use tracing::error;
 
-pub struct SecretsManager<'a> {
+pub struct ParameterStore<'a> {
     client: &'a AwsClient,
     service_name: &'static str,
 }
 
 #[derive(Debug, Deserialize)]
-pub struct BatchResponse {
-    #[serde(rename = "Errors")]
-    pub errors: Vec<BatchResponseError>,
+pub struct GetParametersResponse {
+    /// The parameter object.
+    #[serde(rename = "Parameters")]
+    pub parameters: Vec<Parameter>,
 
-    #[serde(rename = "SecretValues")]
-    pub secret_values: Vec<ResponseSecret>,
+    #[serde(rename = "InvalidParameters")]
+    pub invalid_parameters: Vec<InvalidParameters>,
 }
 
 #[derive(Debug, Deserialize)]
-pub struct BatchResponseError {
-    // #[serde(rename = "ErrorCode")]
-    // pub error_code: String,
-    //
-    #[serde(rename = "Message")]
-    pub message: String,
-
-    #[serde(rename = "SecretId")]
-    pub secret_id: String,
+pub struct InvalidParameters {
+    #[serde(rename = "Name")]
+    pub name: String,
 }
 
 #[derive(Debug, Deserialize)]
-pub struct ResponseSecret {
+pub struct Parameter {
+    /// The Amazon Resource Name (ARN) of the parameter.
     #[serde(rename = "ARN")]
     pub arn: Option<String>,
 
-    #[serde(rename = "CreatedDate")]
-    pub created_date: i64,
+    /// The data type of the parameter, such as text, aws:ec2:image, or aws:tag-specification.
+    #[serde(rename = "DataType")]
+    pub data_type: Option<String>,
 
+    /// The last modification date of the parameter.
+    #[serde(rename = "LastModifiedDate")]
+    pub last_modified_date: Option<f64>,
+
+    /// The name of the parameter.
     #[serde(rename = "Name")]
     pub name: String,
 
-    //
-    // #[serde(rename = "SecretBinary")]
-    // pub secret_binary: Option<Base64>,
-    #[serde(rename = "SecretString")]
-    pub secret_string: String,
+    /// The unique identifier for the parameter version.
+    #[serde(rename = "Selector")]
+    pub selector: Option<String>,
 
-    #[serde(rename = "VersionId")]
-    pub version_id: String,
-    // #[serde(rename = "VersionStages")]
-    // pub version_stages: Vec<String>,
+    /// The parameter source.
+    #[serde(rename = "SourceResult")]
+    pub source_result: Option<String>,
+
+    /// The parameter type.
+    #[serde(rename = "Type")]
+    pub type_: String,
+
+    /// The parameter value.
+    #[serde(rename = "Value")]
+    pub value: String,
+
+    /// The parameter version.
+    #[serde(rename = "Version")]
+    pub version: Option<i64>,
+
+    /// Tags associated with the parameter.
+    #[serde(rename = "Tags")]
+    pub tags: Option<HashMap<String, String>>,
 }
 
-impl<'a> SecretsManager<'a> {
+impl<'a> ParameterStore<'a> {
     pub(crate) fn new(client: &'a AwsClient) -> Self {
         Self {
             client,
-            service_name: "secretsmanager",
+            service_name: "ssm",
         }
     }
 
-    pub async fn batch_get_secret(
+    pub async fn get_parameters(
         &self,
-        secret_arns: &[AwsArn],
-    ) -> Result<HashMap<String, ResponseSecret>, Error> {
+        param_arns: &[AwsArn],
+    ) -> Result<HashMap<String, Parameter>, Error> {
         let mut arns_by_endpoint = HashMap::new();
-        for arn in secret_arns {
+        for arn in param_arns {
             if arn.service != self.service_name {
                 return Err(Error::ArnParseError(arn.to_string()));
             }
@@ -87,7 +102,8 @@ impl<'a> SecretsManager<'a> {
             let endpoint = endpoint.parse::<Uri>()?;
 
             let payload = json!({
-                "SecretIdList": arns.iter().map(|arn| arn.to_string()).collect::<Vec<String>>(),
+                "Names": arns.iter().map(|arn| arn.to_string()).collect::<Vec<String>>(),
+                "WithDecryption": true,
             });
 
             let payload_bytes = serde_json::to_vec(&payload)?;
@@ -95,7 +111,7 @@ impl<'a> SecretsManager<'a> {
             let mut hdrs = HeaderMap::new();
             hdrs.insert(
                 "X-Amz-Target",
-                HeaderValue::from_static("secretsmanager.BatchGetSecretValue"),
+                HeaderValue::from_static("AmazonSSM.GetParameters"),
             );
             hdrs.insert(
                 CONTENT_TYPE,
@@ -116,30 +132,28 @@ impl<'a> SecretsManager<'a> {
             // Send the request
             let response = self.client.perform(signed_request).await?;
 
-            let result: BatchResponse = serde_json::from_slice(response.as_ref())?;
+            let result: GetParametersResponse = serde_json::from_slice(response.as_ref())?;
 
-            if !result.errors.is_empty() {
-                let arns = result
-                    .errors
-                    .into_iter()
-                    .map(|e| (e.secret_id, e.message))
-                    .collect::<Vec<(String, String)>>();
-                error!(arns = ?arns, "Unable to lookup secrets");
+            if !result.invalid_parameters.is_empty() {
                 return Err(Error::InvalidSecrets(
-                    arns.into_iter().map(|arn| arn.0).collect(),
+                    result
+                        .invalid_parameters
+                        .into_iter()
+                        .map(|i| i.name)
+                        .collect(),
                 ));
             }
 
-            for secret in result.secret_values {
-                if secret.arn.is_none() {
-                    error!(secret = secret.name, "Secret was missing ARN");
+            for param in result.parameters {
+                if param.arn.is_none() {
+                    error!(parameter = param.name, "Parameter was missing ARN");
                     return Err(Error::InvalidSecrets(
-                        secret_arns.into_iter().map(|arn| arn.to_string()).collect(),
+                        arns.into_iter().map(|arn| arn.to_string()).collect(),
                     ));
                 }
 
-                let arn = secret.arn.clone().unwrap();
-                res.insert(arn, secret);
+                let arn = param.arn.clone().unwrap();
+                res.insert(arn, param);
             }
         }
 
@@ -154,16 +168,16 @@ mod tests {
     use crate::test_util::init_crypto;
 
     #[tokio::test]
-    async fn test_basic_secret_retrieval() {
-        // TEST_SECRETSMANAGER_ARNS should be set to a comma-separated list of k=v pairs,
+    async fn test_basic_paramstore_retrieval() {
+        // TEST_PARAMSTORE_ARNS should be set to a comma-separated list of k=v pairs,
         // where k is an ARN of a secret and v is the secret value to test against.
-        let test_secret_arns = std::env::var("TEST_SECRETSMANAGER_ARNS");
-        if !test_secret_arns.is_ok() {
-            println!("Skipping test_basic_secret_retrieval due to unset envvar");
+        let test_paramstore_arns = std::env::var("TEST_PARAMSTORE_ARNS");
+        if !test_paramstore_arns.is_ok() {
+            println!("Skipping test_basic_paramstore_retrieval due to unset envvar");
             return;
         }
 
-        let mut test_arns: Vec<(String, String)> = test_secret_arns
+        let mut test_arns: Vec<(String, String)> = test_paramstore_arns
             .unwrap()
             .split(",")
             .filter(|s| !s.is_empty())
@@ -181,30 +195,31 @@ mod tests {
 
         let client = AwsClient::new(AwsConfig::from_env()).unwrap();
 
-        let ss = client.secrets_manager();
+        let ps = client.parameter_store();
 
-        let parsed_arns: Vec<AwsArn> = test_arns
+        let arn_values: Vec<AwsArn> = test_arns
             .iter()
             .map(|(arn, _)| arn.parse::<AwsArn>().unwrap())
             .collect();
-        let res = ss.batch_get_secret(&parsed_arns).await.unwrap();
+        let res = ps.get_parameters(&arn_values).await.unwrap();
 
-        for (test_arn, test_value) in &test_arns {
-            let entry = res.get(test_arn).unwrap();
-            assert_eq!(*test_value, entry.secret_string);
+        for test_arn in &test_arns {
+            let entry = res.get(&test_arn.0).unwrap();
+
+            assert_eq!(test_arn.1, entry.value);
         }
 
         // Test for non-existent ARN
         test_arns.push((
-            "arn:aws:secretsmanager:us-east-1:123345654789:secret:does-not-exist".to_string(),
+            "arn:aws:ssm:us-east-1:123374564789:parameter/invalid-param".to_string(),
             "foobar".to_string(),
         ));
 
-        let parsed_arns: Vec<AwsArn> = test_arns
+        let arn_values: Vec<AwsArn> = test_arns
             .iter()
             .map(|(arn, _)| arn.parse::<AwsArn>().unwrap())
             .collect();
-        let res = ss.batch_get_secret(&parsed_arns).await;
+        let res = ps.get_parameters(&arn_values).await;
 
         assert!(res.is_err());
     }
