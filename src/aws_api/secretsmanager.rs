@@ -41,7 +41,7 @@ pub struct ResponseSecret {
     pub arn: Option<String>,
 
     #[serde(rename = "CreatedDate")]
-    pub created_date: i64,
+    pub created_date: f64,
 
     #[serde(rename = "Name")]
     pub name: String,
