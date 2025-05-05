@@ -36,9 +36,9 @@ pub struct Parameter {
     #[serde(rename = "ARN")]
     pub arn: Option<String>,
 
-    /// The data type of the parameter, such as text, aws:ec2:image, or aws:tag-specification.
-    #[serde(rename = "DataType")]
-    pub data_type: Option<String>,
+    // /// The data type of the parameter, such as text, aws:ec2:image, or aws:tag-specification.
+    // #[serde(rename = "DataType")]
+    // pub data_type: Option<String>,
 
     /// The last modification date of the parameter.
     #[serde(rename = "LastModifiedDate")]
@@ -48,13 +48,13 @@ pub struct Parameter {
     #[serde(rename = "Name")]
     pub name: String,
 
-    /// The unique identifier for the parameter version.
-    #[serde(rename = "Selector")]
-    pub selector: Option<String>,
+    // /// The unique identifier for the parameter version.
+    // #[serde(rename = "Selector")]
+    // pub selector: Option<String>,
 
-    /// The parameter source.
-    #[serde(rename = "SourceResult")]
-    pub source_result: Option<String>,
+    // /// The parameter source.
+    // #[serde(rename = "SourceResult")]
+    // pub source_result: Option<String>,
 
     /// The parameter type.
     #[serde(rename = "Type")]
@@ -68,9 +68,9 @@ pub struct Parameter {
     #[serde(rename = "Version")]
     pub version: Option<i64>,
 
-    /// Tags associated with the parameter.
-    #[serde(rename = "Tags")]
-    pub tags: Option<HashMap<String, String>>,
+    // /// Tags associated with the parameter.
+    // #[serde(rename = "Tags")]
+    // pub tags: Option<HashMap<String, String>>,
 }
 
 impl<'a> ParameterStore<'a> {
