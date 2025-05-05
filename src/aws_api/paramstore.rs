@@ -39,7 +39,6 @@ pub struct Parameter {
     // /// The data type of the parameter, such as text, aws:ec2:image, or aws:tag-specification.
     // #[serde(rename = "DataType")]
     // pub data_type: Option<String>,
-
     /// The last modification date of the parameter.
     #[serde(rename = "LastModifiedDate")]
     pub last_modified_date: Option<f64>,
@@ -55,7 +54,6 @@ pub struct Parameter {
     // /// The parameter source.
     // #[serde(rename = "SourceResult")]
     // pub source_result: Option<String>,
-
     /// The parameter type.
     #[serde(rename = "Type")]
     pub type_: String,
@@ -67,7 +65,6 @@ pub struct Parameter {
     /// The parameter version.
     #[serde(rename = "Version")]
     pub version: Option<i64>,
-
     // /// Tags associated with the parameter.
     // #[serde(rename = "Tags")]
     // pub tags: Option<HashMap<String, String>>,
