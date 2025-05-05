@@ -1,3 +1,4 @@
+use crate::aws_api::SECRETS_MANAGER_SERVICE;
 use crate::aws_api::arn::AwsArn;
 use crate::aws_api::auth::{AwsRequestSigner, SystemClock};
 use crate::aws_api::client::AwsClient;
@@ -62,7 +63,7 @@ impl<'a> SecretsManager<'a> {
     pub(crate) fn new(client: &'a AwsClient) -> Self {
         Self {
             client,
-            service_name: "secretsmanager",
+            service_name: SECRETS_MANAGER_SERVICE,
         }
     }
 

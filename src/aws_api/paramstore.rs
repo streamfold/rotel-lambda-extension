@@ -1,3 +1,4 @@
+use crate::aws_api::PARAM_STORE_SERVICE;
 use crate::aws_api::arn::AwsArn;
 use crate::aws_api::auth::{AwsRequestSigner, SystemClock};
 use crate::aws_api::client::AwsClient;
@@ -74,7 +75,7 @@ impl<'a> ParameterStore<'a> {
     pub(crate) fn new(client: &'a AwsClient) -> Self {
         Self {
             client,
-            service_name: "ssm",
+            service_name: PARAM_STORE_SERVICE,
         }
     }
 
