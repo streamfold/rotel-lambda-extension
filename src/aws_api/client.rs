@@ -1,5 +1,6 @@
 use crate::aws_api::config::AwsConfig;
 use crate::aws_api::error::Error;
+use crate::aws_api::paramstore::ParameterStore;
 use crate::aws_api::secretsmanager::SecretsManager;
 use crate::util::http::response_string;
 use bytes::Bytes;
@@ -31,6 +32,11 @@ impl AwsClient {
     /// Get an instance of the SecretsManager service
     pub fn secrets_manager(&self) -> SecretsManager {
         SecretsManager::new(self)
+    }
+
+    /// Get an instance of the ParameterStore service
+    pub fn parameter_store(&self) -> ParameterStore {
+        ParameterStore::new(self)
     }
 
     pub async fn perform(&self, req: Request<Full<Bytes>>) -> Result<Bytes, Error> {

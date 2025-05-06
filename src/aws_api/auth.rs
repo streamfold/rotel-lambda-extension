@@ -13,6 +13,7 @@ pub trait Clock {
     fn now(&self) -> DateTime<Utc>;
 }
 
+#[derive(Default)]
 pub struct SystemClock;
 
 impl Clock for SystemClock {

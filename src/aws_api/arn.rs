@@ -1,7 +1,9 @@
 use crate::aws_api::error::Error;
+use std::fmt::{Display, Formatter};
 use std::str::FromStr;
 
-pub(crate) struct AwsArn {
+#[derive(Debug)]
+pub struct AwsArn {
     pub(crate) partition: String,
     pub(crate) service: String,
     pub(crate) region: String,
@@ -13,11 +15,11 @@ pub(crate) struct AwsArn {
 impl FromStr for AwsArn {
     type Err = Error;
 
-    // Note, this will only handle ARNs were the resource type is included and split with ':'
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         // Split one more than we need to verify it's valid
-        let mut parts: Vec<String> = s.splitn(8, ":").map(|s| s.to_string()).collect();
-        if parts.len() != 7 {
+        let mut parts: Vec<String> = s.splitn(9, ":").map(|s| s.to_string()).collect();
+        let num_parts = parts.len();
+        if num_parts < 6 || num_parts >= 8 {
             return Err(Error::ArnParseError(s.to_string()));
         }
 
@@ -37,7 +39,9 @@ impl FromStr for AwsArn {
         };
 
         arn.resource_id = parts.pop().unwrap();
-        arn.resource_type = parts.pop().unwrap();
+        if num_parts == 7 {
+            arn.resource_type = parts.pop().unwrap();
+        }
         arn.account_id = parts.pop().unwrap();
         arn.region = parts.pop().unwrap();
         arn.service = parts.pop().unwrap();
@@ -48,6 +52,23 @@ impl FromStr for AwsArn {
         }
 
         Ok(arn)
+    }
+}
+
+impl Display for AwsArn {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let mut parts = Vec::with_capacity(7);
+        parts.push("arn");
+        parts.push(self.partition.as_str());
+        parts.push(self.service.as_str());
+        parts.push(self.region.as_str());
+        parts.push(self.account_id.as_str());
+        if self.resource_type != "" {
+            parts.push(self.resource_type.as_str());
+        }
+        parts.push(self.resource_id.as_str());
+
+        write!(f, "{}", parts.join(":"))
     }
 }
 
@@ -68,7 +89,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_parse_arn_valid() {
+    fn test_parse_secrets_arn_valid() {
         let input = "arn:aws:secretsmanager:us-east-2:891477334659:secret:test-ohio-secret-L86lpn";
 
         let arn = input.parse::<AwsArn>().unwrap();
@@ -79,6 +100,22 @@ mod tests {
         assert_eq!("891477334659", arn.account_id);
         assert_eq!("secret", arn.resource_type);
         assert_eq!("test-ohio-secret-L86lpn", arn.resource_id);
+    }
+
+    #[test]
+    fn test_parse_ssm_arn_valid() {
+        let input = "arn:aws:ssm:us-east-1:123377354456:parameter/ci-test-value";
+
+        let arn = input.parse::<AwsArn>().unwrap();
+
+        assert_eq!(input, arn.to_string());
+
+        assert_eq!("aws", arn.partition);
+        assert_eq!("ssm", arn.service);
+        assert_eq!("us-east-1", arn.region);
+        assert_eq!("123377354456", arn.account_id);
+        assert_eq!("", arn.resource_type);
+        assert_eq!("parameter/ci-test-value", arn.resource_id);
     }
 
     #[test]
