@@ -46,7 +46,7 @@ impl FromStr for AwsArn {
             if res_parts[0].is_empty() || res_parts[1].is_empty() {
                 return Err(Error::ArnParseError(s.to_string()));
             }
-            
+
             arn.resource_id = res_parts[0].to_string();
             arn.resource_field = res_parts[1].to_string();
         } else {
@@ -79,8 +79,8 @@ impl Display for AwsArn {
         if self.resource_type != "" {
             parts.push(self.resource_type.as_str());
         }
-        let s =  if self.resource_field != "" {
-            &format!("{}#{}", self.resource_id, self.resource_field) 
+        let s = if self.resource_field != "" {
+            &format!("{}#{}", self.resource_id, self.resource_field)
         } else {
             &self.resource_id
         };
@@ -120,14 +120,14 @@ mod tests {
         assert_eq!("secret", arn.resource_type);
         assert_eq!("test-ohio-secret-L86lpn", arn.resource_id);
         assert_eq!("", arn.resource_field);
-        
-        let input = "arn:aws:secretsmanager:us-east-2:891477334659:secret:test-ohio-secret-L86lpn#key-name";
+
+        let input =
+            "arn:aws:secretsmanager:us-east-2:891477334659:secret:test-ohio-secret-L86lpn#key-name";
         let arn = input.parse::<AwsArn>().unwrap();
-        
+
         assert_eq!(input, arn.to_string());
         assert_eq!("test-ohio-secret-L86lpn", arn.resource_id);
         assert_eq!("key-name", arn.resource_field);
-        
     }
 
     #[test]

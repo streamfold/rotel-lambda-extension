@@ -82,7 +82,11 @@ pub async fn resolve_secrets(
         }
 
         if arn.service == PARAM_STORE_SERVICE && arn.resource_field != "" {
-            return Err(format!("JSON field selection not allowed for parameter store: {}", arn.to_string()).into())
+            return Err(format!(
+                "JSON field selection not allowed for parameter store: {}",
+                arn.to_string()
+            )
+            .into());
         }
 
         // This should never happen, but avoid silent bugs later
@@ -107,7 +111,12 @@ pub async fn resolve_secrets(
     }
 
     for (svc, arns_by_base) in arns_by_svc {
-        for arn_chunk in arns_by_base.keys().cloned().collect::<Vec<AwsArn>>().chunks(MAX_LOOKUP_LEN) {
+        for arn_chunk in arns_by_base
+            .keys()
+            .cloned()
+            .collect::<Vec<AwsArn>>()
+            .chunks(MAX_LOOKUP_LEN)
+        {
             if svc == SECRETS_MANAGER_SERVICE {
                 let sm = client.secrets_manager();
 
@@ -117,28 +126,45 @@ pub async fn resolve_secrets(
                             let aws_arn = arn.parse::<AwsArn>()?;
                             match arns_by_base.get(&aws_arn) {
                                 None => {
-                                    return Err(format!("Returned secret ARN was not found: {}", arn).into());
+                                    return Err(format!(
+                                        "Returned secret ARN was not found: {}",
+                                        arn
+                                    )
+                                    .into());
                                 }
                                 Some(entry) => {
                                     for full_arn in entry {
                                         if full_arn.resource_field == "" {
-                                            secure_arns.insert(full_arn.to_string(), secret.secret_string.clone());
-                                            continue
+                                            secure_arns.insert(
+                                                full_arn.to_string(),
+                                                secret.secret_string.clone(),
+                                            );
+                                            continue;
                                         }
-                                        
-                                        match serde_json::from_str::<HashMap<String, String>>(secret.secret_string.as_str()) {
-                                            Ok(json) => {
-                                                match json.get(&full_arn.resource_field) {
-                                                    None => {
-                                                        return Err(format!("Secret JSON did not contain field {}: {:?}",
-                                                                           full_arn.resource_field, full_arn).into())
-                                                    }
-                                                    Some(value) => {
-                                                        secure_arns.insert(full_arn.to_string(), value.to_string());
-                                                    }
+
+                                        match serde_json::from_str::<HashMap<String, String>>(
+                                            secret.secret_string.as_str(),
+                                        ) {
+                                            Ok(json) => match json.get(&full_arn.resource_field) {
+                                                None => return Err(format!(
+                                                    "Secret JSON did not contain field {}: {:?}",
+                                                    full_arn.resource_field, full_arn
+                                                )
+                                                .into()),
+                                                Some(value) => {
+                                                    secure_arns.insert(
+                                                        full_arn.to_string(),
+                                                        value.to_string(),
+                                                    );
                                                 }
+                                            },
+                                            Err(_) => {
+                                                return Err(format!(
+                                                    "Unable to parse secret string as JSON: {:?}",
+                                                    full_arn
+                                                )
+                                                .into());
                                             }
-                                            Err(_) => return Err(format!("Unable to parse secret string as JSON: {:?}", full_arn).into()),
                                         }
                                     }
                                 }
