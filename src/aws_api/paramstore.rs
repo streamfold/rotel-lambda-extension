@@ -163,7 +163,7 @@ impl<'a> ParameterStore<'a> {
 mod tests {
     use super::*;
     use crate::aws_api::config::AwsConfig;
-    use crate::test_util::init_crypto;
+    use crate::test_util::{init_crypto, parse_test_arns};
 
     #[tokio::test]
     async fn test_basic_paramstore_retrieval() {
@@ -175,19 +175,7 @@ mod tests {
             return;
         }
 
-        let mut test_arns: Vec<(String, String)> = test_paramstore_arns
-            .unwrap()
-            .split(",")
-            .filter(|s| !s.is_empty())
-            .filter_map(|pair| {
-                let parts: Vec<&str> = pair.splitn(2, '=').collect();
-                if parts.len() == 2 {
-                    Some((parts[0].trim().to_string(), parts[1].trim().to_string()))
-                } else {
-                    None // Skip malformed pairs that don't have an equals sign
-                }
-            })
-            .collect();
+        let mut test_arns = parse_test_arns(test_paramstore_arns.unwrap());
 
         init_crypto();
 
