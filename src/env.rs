@@ -81,6 +81,10 @@ pub async fn resolve_secrets(
             return Err(format!("Unknown secret ARN service name: {}", arn.service).into());
         }
 
+        if arn.service == PARAM_STORE_SERVICE && arn.resource_field != "" {
+            return Err(format!("JSON field selection not allowed for parameter store: {}", arn.to_string()).into())
+        }
+
         // This should never happen, but avoid silent bugs later
         if arn.to_string() != *arn_str {
             return Err(format!(
@@ -91,21 +95,54 @@ pub async fn resolve_secrets(
             .into());
         }
 
+        let mut arn_without_field = arn.clone();
+        arn_without_field.resource_field = "".to_string();
+
         arns_by_svc
             .entry(arn.service.clone())
+            .or_insert_with(|| HashMap::new())
+            .entry(arn_without_field)
             .or_insert_with(|| Vec::new())
             .push(arn);
     }
 
-    for (svc, arns) in &arns_by_svc {
-        for arn_chunk in arns.chunks(MAX_LOOKUP_LEN) {
+    for (svc, arns_by_base) in arns_by_svc {
+        for arn_chunk in arns_by_base.keys().cloned().collect::<Vec<AwsArn>>().chunks(MAX_LOOKUP_LEN) {
             if svc == SECRETS_MANAGER_SERVICE {
                 let sm = client.secrets_manager();
 
                 match sm.batch_get_secret(arn_chunk).await {
                     Ok(res) => {
                         for (arn, secret) in res {
-                            secure_arns.insert(arn, secret.secret_string);
+                            let aws_arn = arn.parse::<AwsArn>()?;
+                            match arns_by_base.get(&aws_arn) {
+                                None => {
+                                    return Err(format!("Returned secret ARN was not found: {}", arn).into());
+                                }
+                                Some(entry) => {
+                                    for full_arn in entry {
+                                        if full_arn.resource_field == "" {
+                                            secure_arns.insert(full_arn.to_string(), secret.secret_string.clone());
+                                            continue
+                                        }
+                                        
+                                        match serde_json::from_str::<HashMap<String, String>>(secret.secret_string.as_str()) {
+                                            Ok(json) => {
+                                                match json.get(&full_arn.resource_field) {
+                                                    None => {
+                                                        return Err(format!("Secret JSON did not contain field {}: {:?}",
+                                                                           full_arn.resource_field, full_arn).into())
+                                                    }
+                                                    Some(value) => {
+                                                        secure_arns.insert(full_arn.to_string(), value.to_string());
+                                                    }
+                                                }
+                                            }
+                                            Err(_) => return Err(format!("Unable to parse secret string as JSON: {:?}", full_arn).into()),
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
                     Err(err) => {
@@ -148,7 +185,7 @@ pub async fn resolve_secrets(
 mod tests {
     use crate::aws_api::config::AwsConfig;
     use crate::env::{EnvArnParser, resolve_secrets};
-    use crate::test_util::init_crypto;
+    use crate::test_util::{init_crypto, parse_test_arns};
     use std::collections::HashMap;
 
     #[test]
@@ -200,19 +237,7 @@ mod tests {
             return;
         }
 
-        let test_arns: Vec<(String, String)> = test_envsecret_arns
-            .unwrap()
-            .split(",")
-            .filter(|s| !s.is_empty())
-            .filter_map(|pair| {
-                let parts: Vec<&str> = pair.splitn(2, '=').collect();
-                if parts.len() == 2 {
-                    Some((parts[0].trim().to_string(), parts[1].trim().to_string()))
-                } else {
-                    None // Skip malformed pairs that don't have an equals sign
-                }
-            })
-            .collect();
+        let test_arns = parse_test_arns(test_envsecret_arns.unwrap());
 
         init_crypto();
 
@@ -227,6 +252,27 @@ mod tests {
         for (test_arn, test_value) in test_arns {
             let result = test_arn_map.get(&test_arn).unwrap();
             assert_eq!(test_value, *result);
+        }
+    }
+
+    #[tokio::test]
+    async fn test_resolve_secrets_with_failures() {
+        let test_envsecret_arns = std::env::var("TEST_ENVSECRET_FAIL_ARNS");
+        if !test_envsecret_arns.is_ok() {
+            println!("Skipping test_resolve_secrets_with_failures due to unset envvar");
+            return;
+        }
+
+        let test_arns = parse_test_arns(test_envsecret_arns.unwrap());
+
+        init_crypto();
+
+        for (test_arn, _) in &test_arns {
+            let mut test_arn_map = HashMap::new();
+            test_arn_map.insert(test_arn.clone(), "".to_string());
+
+            let res = resolve_secrets(&AwsConfig::from_env(), &mut test_arn_map).await;
+            assert!(res.is_err());
         }
     }
 }
