@@ -42,6 +42,9 @@ The Rotel Lambda layer can be used alongside the language support extension laye
 
 To use a language layer, pick the extension layer ARN that matches your runtime language and include it **in addition** to the Rotel layer ARN above. You will need to set `AWS_LAMBDA_EXEC_WRAPPER` so that your code is auto-instrumented on start up. Make sure to consult the documentation for your instrumentation layer.
 
+To see how this works in practice, check out this Node.js
+[example ✨](https://github.com/streamfold/nodejs-aws-lambda-example). 
+
 ## Configuration
 
 The Rotel Lambda Extension is configured using the same environment variables documented
@@ -121,6 +124,17 @@ mindful of that impact when retrieving secrets. Secrets are retrieved in batches
 multiple secret values should not take longer than a single secret.
 
 Secrets are only retrieved on initialization, so subsequent invocations are not impacted.
+
+### Default resource attributes
+
+Log messages forwarded with the TelemetryAPI will automatically use a `service.name` equal to the AWS Lambda function name. Trace spans will default to the configured SDK value. You can set `service.name`, and any other resource attribute, with the following environment variable:
+
+```shell
+ROTEL_OTEL_RESOURCE_ATTRIBUTES=service.name=my-lambda-api,service.version=2.0.0
+```
+
+This will insert or replace those resource attributes on all traces, logs, and metrics. See Rotel
+[docs](https://github.com/streamfold/rotel?tab=readme-ov-file#setting-resource-attributes) for more info.
 
 ## Disabling CloudWatch Logs
 
