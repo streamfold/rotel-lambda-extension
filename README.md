@@ -130,7 +130,7 @@ Secrets are only retrieved on initialization, so subsequent invocations are not 
 Log messages forwarded with the TelemetryAPI will automatically use a `service.name` equal to the AWS Lambda function name. Trace spans will default to the configured SDK value. You can set `service.name`, and any other resource attribute, with the following environment variable:
 
 ```shell
-ROTEL_OTEL_RESOURCE_ATTRIBUTES=service.name=my-lambda-api,service.version=2.0.0
+ROTEL_OTEL_RESOURCE_ATTRIBUTES="service.name=my-lambda-api,service.version=2.0.0"
 ```
 
 This will insert or replace those resource attributes on all traces, logs, and metrics. See Rotel
