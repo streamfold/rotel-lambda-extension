@@ -26,7 +26,7 @@ rustls = "0.23.20"
 tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }
 tracing-appender = "0.2.3"
 tower = { version = "0.5.2", features = ["retry", "timeout"] }
-rotel = { git = "https://github.com/streamfold/rotel", rev = "60cee4a8e615581ef60f68e59895d071159a5bb6" }
+rotel = { git = "https://github.com/streamfold/rotel", rev = "6eb03ea6c39900f8337f2274090481c34f46984f" }
 opentelemetry-proto = "0.29.0"
 chrono = "0.4.40"
 opentelemetry-semantic-conventions = { version = "0.29.0", features = ["semconv_experimental"] }
