@@ -2,7 +2,7 @@ use crate::aws_api::error::Error;
 use std::fmt::{Display, Formatter};
 use std::str::FromStr;
 
-#[derive(Debug)]
+#[derive(Clone, Debug, Eq, PartialEq, Hash)]
 pub struct AwsArn {
     pub(crate) partition: String,
     pub(crate) service: String,
@@ -10,6 +10,7 @@ pub struct AwsArn {
     pub(crate) account_id: String,
     pub(crate) resource_type: String,
     pub(crate) resource_id: String,
+    pub(crate) resource_field: String,
 }
 
 impl FromStr for AwsArn {
@@ -36,9 +37,21 @@ impl FromStr for AwsArn {
             account_id: "".to_string(),
             resource_type: "".to_string(),
             resource_id: "".to_string(),
+            resource_field: "".to_string(),
         };
 
-        arn.resource_id = parts.pop().unwrap();
+        let resource_id = parts.pop().unwrap();
+        let res_parts: Vec<&str> = resource_id.splitn(2, "#").collect();
+        if res_parts.len() > 1 {
+            if res_parts[0].is_empty() || res_parts[1].is_empty() {
+                return Err(Error::ArnParseError(s.to_string()));
+            }
+
+            arn.resource_id = res_parts[0].to_string();
+            arn.resource_field = res_parts[1].to_string();
+        } else {
+            arn.resource_id = resource_id;
+        }
         if num_parts == 7 {
             arn.resource_type = parts.pop().unwrap();
         }
@@ -66,7 +79,12 @@ impl Display for AwsArn {
         if self.resource_type != "" {
             parts.push(self.resource_type.as_str());
         }
-        parts.push(self.resource_id.as_str());
+        let s = if self.resource_field != "" {
+            &format!("{}#{}", self.resource_id, self.resource_field)
+        } else {
+            &self.resource_id
+        };
+        parts.push(s.as_str());
 
         write!(f, "{}", parts.join(":"))
     }
@@ -94,12 +112,22 @@ mod tests {
 
         let arn = input.parse::<AwsArn>().unwrap();
 
+        assert_eq!(input, arn.to_string());
         assert_eq!("aws", arn.partition);
         assert_eq!("secretsmanager", arn.service);
         assert_eq!("us-east-2", arn.region);
         assert_eq!("891477334659", arn.account_id);
         assert_eq!("secret", arn.resource_type);
         assert_eq!("test-ohio-secret-L86lpn", arn.resource_id);
+        assert_eq!("", arn.resource_field);
+
+        let input =
+            "arn:aws:secretsmanager:us-east-2:891477334659:secret:test-ohio-secret-L86lpn#key-name";
+        let arn = input.parse::<AwsArn>().unwrap();
+
+        assert_eq!(input, arn.to_string());
+        assert_eq!("test-ohio-secret-L86lpn", arn.resource_id);
+        assert_eq!("key-name", arn.resource_field);
     }
 
     #[test]
@@ -132,6 +160,21 @@ mod tests {
         );
         assert!(
             !"arn:aws:secretsmanager891477334659:secret:test-ohio-secret-L86lpn"
+                .parse::<AwsArn>()
+                .is_ok()
+        );
+        assert!(
+            !"arn:aws:secretsmanager:us-east-2:891477334659:secret:test-ohio-secret-L86lpn#"
+                .parse::<AwsArn>()
+                .is_ok()
+        );
+        assert!(
+            !"arn:aws:secretsmanager:us-east-2:891477334659:secret:#"
+                .parse::<AwsArn>()
+                .is_ok()
+        );
+        assert!(
+            !"arn:aws:secretsmanager:us-east-2:891477334659:secret:#key-name"
                 .parse::<AwsArn>()
                 .is_ok()
         );
