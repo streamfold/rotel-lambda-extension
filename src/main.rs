@@ -35,8 +35,8 @@ use tokio::time::{Instant, Interval, timeout};
 use tokio::{pin, select};
 use tokio_util::sync::CancellationToken;
 use tower_http::BoxError;
-use tracing::{debug, error, info, warn};
 use tracing::level_filters::LevelFilter;
+use tracing::{debug, error, info, warn};
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::{EnvFilter, Registry};
 
@@ -114,7 +114,7 @@ fn main() -> ExitCode {
             return ExitCode::FAILURE;
         }
     };
-    
+
     let agent = opt.agent_args;
     let mut port_map = match bind_endpoints(&[
         agent.otlp_grpc_endpoint,
@@ -523,9 +523,7 @@ fn setup_logging() -> Result<LoggerGuard, BoxError> {
         .with_ansi(false)
         .compact();
 
-    let subscriber = Registry::default()
-        .with(filter)
-        .with(file_layer);
+    let subscriber = Registry::default().with(filter).with(file_layer);
 
     tracing::subscriber::set_global_default(subscriber).unwrap();
     Ok(guard)
