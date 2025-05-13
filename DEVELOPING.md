@@ -5,11 +5,31 @@ Prerequisites:
 
 ## Building
 
-To build the project for production, run `cargo lambda build --extension --release`. Remove the `--release` flag to build for development.
+```shell
+make build
+```
+
+This will perform a release build of the extension. 
 
 Read more about building your lambda extension in [the Cargo Lambda documentation](https://www.cargo-lambda.info/commands/build.html#extensions).
 
-## Deploy and Publish
+## Deploy testing
+
+If you want to test a deployment, you can use the following command. By default it will publish as the layer name `rotel-extension-test`. 
+
+```shell
+make deploy
+```
+
+In order to use the layer in other AWS accounts, you will need to run the following command to publish it. Pass the ARN of the layer output from the above command as an argument.
+
+```shell
+ ./scripts/publish-lambda-version.sh arn:aws:lambda:us-east-1:999999999999:layer:rotel-extension-test:29
+```
+
+_You must set the valid AWS CLI credentials in your environment first._ 
+
+## Production Deploy and Publish
 
 When a release is created, the `release.yml` Github action will deploy and publish a new Lambda layer for both x86-64 and arm64 architectures.
 The layer will be published to multiple regions, controlled by the regions matrix in the action script.
