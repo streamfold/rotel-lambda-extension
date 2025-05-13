@@ -826,7 +826,7 @@ dependencies = [
  "futures-core",
  "futures-sink",
  "http",
- "indexmap 2.8.0",
+ "indexmap 2.9.0",
  "slab",
  "tokio",
  "tokio-util",
@@ -1181,9 +1181,9 @@ dependencies = [
 
 [[package]]
 name = "indexmap"
-version = "2.8.0"
+version = "2.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3954d50fe15b02142bf25d3b8bdadb634ec3948f103d04ffe3031bc8fe9d7058"
+checksum = "cea70ddb795996207ad57735b50c5982d8844f38ba9ee5f1aedcfb708a2aa11e"
 dependencies = [
  "equivalent",
  "hashbrown 0.15.2",
@@ -1591,7 +1591,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3672b37090dbd86368a4145bc067582552b29c27377cad4e0a306c97f9bd7772"
 dependencies = [
  "fixedbitset",
- "indexmap 2.8.0",
+ "indexmap 2.9.0",
 ]
 
 [[package]]
@@ -1893,7 +1893,7 @@ dependencies = [
 [[package]]
 name = "rotel"
 version = "0.0.1-alpha7"
-source = "git+https://github.com/streamfold/rotel?rev=6eb03ea6c39900f8337f2274090481c34f46984f#6eb03ea6c39900f8337f2274090481c34f46984f"
+source = "git+https://github.com/streamfold/rotel?rev=657ea5ee4a113586c8c176ba4ce34391920741fb#657ea5ee4a113586c8c176ba4ce34391920741fb"
 dependencies = [
  "bstr",
  "bytes",
@@ -1914,6 +1914,7 @@ dependencies = [
  "hyper",
  "hyper-rustls",
  "hyper-util",
+ "indexmap 2.9.0",
  "libc",
  "lz4_flex",
  "num_cpus",
