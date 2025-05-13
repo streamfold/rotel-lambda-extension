@@ -36,6 +36,7 @@ use tokio::{pin, select};
 use tokio_util::sync::CancellationToken;
 use tower_http::BoxError;
 use tracing::{debug, error, info, warn};
+use tracing::level_filters::LevelFilter;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::{EnvFilter, Registry};
 
@@ -53,10 +54,6 @@ pub const FLUSH_EXPORTERS_TIMEOUT_MILLIS: u64 = 3_000;
 #[command(name = "rotel-lambda-extension")]
 #[command(bin_name = "rotel-lambda-extension")]
 struct Arguments {
-    #[arg(long, global = true, env = "ROTEL_LOG_LEVEL", default_value = "info")]
-    /// Log configuration
-    log_level: String,
-
     #[arg(long, env = "ROTEL_TELEMETRY_ENDPOINT", default_value = "0.0.0.0:8990", value_parser = args::parse_endpoint)]
     telemetry_endpoint: SocketAddr,
 
@@ -110,7 +107,14 @@ fn main() -> ExitCode {
 
     let opt = Arguments::parse();
 
-    let _logger = setup_logging(&opt.log_level);
+    let _guard = match setup_logging() {
+        Ok(guard) => guard,
+        Err(e) => {
+            eprintln!("ERROR: failed to setup logging: {}", e);
+            return ExitCode::FAILURE;
+        }
+    };
+    
     let agent = opt.agent_args;
     let mut port_map = match bind_endpoints(&[
         agent.otlp_grpc_endpoint,
@@ -500,8 +504,14 @@ fn handle_next_response(evt: NextEvent) -> bool {
 type LoggerGuard = tracing_appender::non_blocking::WorkerGuard;
 
 // todo: match logging to the recommended lambda extension approach
-fn setup_logging(log_level: &str) -> std::io::Result<LoggerGuard> {
+fn setup_logging() -> Result<LoggerGuard, BoxError> {
     let (non_blocking_writer, guard) = tracing_appender::non_blocking(std::io::stdout());
+
+    let filter = EnvFilter::builder()
+        .with_default_directive(LevelFilter::INFO.into())
+        .from_env()?
+        .add_directive("opentelemetry=warn".parse()?)
+        .add_directive("opentelemetry_sdk=warn".parse()?);
 
     let file_layer = tracing_subscriber::fmt::layer()
         .with_writer(non_blocking_writer)
@@ -514,7 +524,7 @@ fn setup_logging(log_level: &str) -> std::io::Result<LoggerGuard> {
         .compact();
 
     let subscriber = Registry::default()
-        .with(EnvFilter::new(log_level))
+        .with(filter)
         .with(file_layer);
 
     tracing::subscriber::set_global_default(subscriber).unwrap();
