@@ -3,6 +3,7 @@
 Rotel Lambda Extension is an advanced AWS Lambda extension layer, built on top of [Rotel](https://github.com/streamfold/rotel)—a lightweight, high-performance and low overhead OpenTelemetry Collector perfectly suited for resource-constrained environments. By minimizing binary size, reducing cold start latency, and lowering memory overhead, this extension optimizes performance and cost efficiency in AWS Lambda deployments.
 
 ![Coldstart Comparison](/contrib/coldstarts.png)
+
 _This chart compares cold start times between Rotel, the [OpenTelemetry Lambda](https://github.com/open-telemetry/opentelemetry-lambda/blob/main/collector/README.md), and the [Datadog OTEL Lambda](https://docs.datadoghq.com/serverless/aws_lambda/opentelemetry/?tab=python) layers. Check out the benchmark code [here](https://github.com/streamfold/python-lambda-benchmark)._ 
 
 The Rotel Lambda Extension integrates with the Lambda [TelemetryAPI](https://docs.aws.amazon.com/lambda/latest/dg/telemetry-api.html) to collect **function logs** and **extension logs** and will export them to the configured exporter. This can reduce your Lambda observability costs if you combine it with [disabling CloudWatch Logs](#disabling-cloudwatch-logs). 
