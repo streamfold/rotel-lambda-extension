@@ -26,7 +26,10 @@ The layer is deployed in the following AWS regions (if you don't see yours, let 
 - us-east-1
 - us-east-2
 - us-west-2
+- ca-central-1
 - eu-central-1
+- eu-west-2
+- ap-southeast-1
 - ap-southeast-2
 
 The layer supports the Amazon Linux 2023
