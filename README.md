@@ -23,14 +23,12 @@ arn:aws:lambda:{region}:418653438961:layer:rotel-extension-arm64-alpha:{version}
 ```
 
 The layer is deployed in the following AWS regions (if you don't see yours, let us know!):
-- us-east-1
-- us-east-2
-- us-west-2
+- us-east-{1, 2}, us-west-{1, 2}
+- eu-central-1, eu-north-1, eu-west-{1, 2, 3}
 - ca-central-1
-- eu-central-1
-- eu-west-2
-- ap-southeast-1
-- ap-southeast-2
+- ap-southeast-{1, 2}, ap-northeast-{1, 2}
+- ap-south-1
+- sa-east-1
 
 The layer supports the Amazon Linux 2023
 [Lambda runtime](https://docs.aws.amazon.com/lambda/latest/dg/lambda-runtimes.html#runtimes-supported)
