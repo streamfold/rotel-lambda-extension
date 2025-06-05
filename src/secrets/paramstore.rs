@@ -1,10 +1,11 @@
-use crate::aws_api::PARAM_STORE_SERVICE;
-use crate::aws_api::arn::AwsArn;
-use crate::aws_api::auth::{AwsRequestSigner, SystemClock};
-use crate::aws_api::client::AwsClient;
-use crate::aws_api::error::Error;
+use crate::secrets::PARAM_STORE_SERVICE;
+use crate::secrets::client::AwsClient;
+use crate::secrets::error::Error;
+use bytes::Bytes;
 use http::header::CONTENT_TYPE;
 use http::{HeaderMap, HeaderValue, Method, Uri};
+use rotel::aws_api::arn::AwsArn;
+use rotel::aws_api::auth::{AwsRequestSigner, SystemClock};
 use serde::Deserialize;
 use serde_json::json;
 use std::collections::HashMap;
@@ -85,8 +86,8 @@ impl<'a> ParameterStore<'a> {
     ) -> Result<HashMap<String, Parameter>, Error> {
         let mut arns_by_endpoint = HashMap::new();
         for arn in param_arns {
-            if arn.service != self.service_name {
-                return Err(Error::ArnParseError(arn.to_string()));
+            if arn.service() != self.service_name {
+                return Err(Error::InvalidService(arn.service().clone()));
             }
 
             arns_by_endpoint
@@ -104,7 +105,7 @@ impl<'a> ParameterStore<'a> {
                 "WithDecryption": true,
             });
 
-            let payload_bytes = serde_json::to_vec(&payload)?;
+            let payload_bytes = Bytes::from(serde_json::to_vec(&payload)?);
 
             let mut hdrs = HeaderMap::new();
             hdrs.insert(
@@ -119,10 +120,8 @@ impl<'a> ParameterStore<'a> {
             // Sign the request
             let signer = AwsRequestSigner::new(
                 self.service_name,
-                &arns[0].region,
-                &self.client.config.aws_access_key_id,
-                &self.client.config.aws_secret_access_key,
-                self.client.config.aws_session_token.as_deref(),
+                arns[0].region(),
+                self.client.config.clone(),
                 SystemClock,
             );
             let signed_request = signer.sign(endpoint, Method::POST, hdrs, payload_bytes)?;
@@ -162,8 +161,8 @@ impl<'a> ParameterStore<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::aws_api::config::AwsConfig;
     use crate::test_util::{init_crypto, parse_test_arns};
+    use rotel::aws_api::config::AwsConfig;
 
     #[tokio::test]
     async fn test_basic_paramstore_retrieval() {

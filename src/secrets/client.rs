@@ -1,7 +1,6 @@
-use crate::aws_api::config::AwsConfig;
-use crate::aws_api::error::Error;
-use crate::aws_api::paramstore::ParameterStore;
-use crate::aws_api::secretsmanager::SecretsManager;
+use crate::secrets::error::Error;
+use crate::secrets::paramstore::ParameterStore;
+use crate::secrets::secretsmanager::SecretsManager;
 use crate::util::http::response_string;
 use bytes::Bytes;
 use http::Request;
@@ -11,6 +10,7 @@ use hyper_rustls::HttpsConnector;
 use hyper_util::client::legacy::Client as HyperClient;
 use hyper_util::client::legacy::connect::HttpConnector;
 use hyper_util::rt::{TokioExecutor, TokioTimer};
+use rotel::aws_api::config::AwsConfig;
 use rustls::ClientConfig;
 use std::time::Duration;
 use tower::BoxError;
