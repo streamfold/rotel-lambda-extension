@@ -1825,7 +1825,7 @@ dependencies = [
 [[package]]
 name = "rotel"
 version = "0.0.1-alpha10"
-source = "git+https://github.com/streamfold/rotel?rev=92091ae73e0d993ce0e2a45ec41385c2c6bafe17#92091ae73e0d993ce0e2a45ec41385c2c6bafe17"
+source = "git+https://github.com/streamfold/rotel?rev=d94d910dcd786eb234f01942c7e7ad14c183b529#d94d910dcd786eb234f01942c7e7ad14c183b529"
 dependencies = [
  "bstr",
  "bytes",
@@ -1859,6 +1859,7 @@ dependencies = [
  "prost-build",
  "rand 0.8.5",
  "read-restrict",
+ "regex",
  "rustls",
  "rustls-pki-types",
  "serde",
