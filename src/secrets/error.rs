@@ -4,26 +4,22 @@ use tower::BoxError;
 
 #[derive(Debug)]
 pub enum Error {
-    ArnParseError(String),
+    InvalidService(String),
     UriParseError(InvalidUri),
-    RequestBuildError(http::Error),
     HttpError(hyper_util::client::legacy::Error),
     HttpResponseError(hyper::Error),
     HttpResponseErrorParse(BoxError),
-    SignatureError(String),
-    SerdeError(serde_json::Error),
     AwsError { code: String, message: String },
     InvalidSecrets(Vec<String>),
+    SigningError(rotel::aws_api::error::Error),
+    SerdeError(serde_json::Error),
 }
 
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Error::RequestBuildError(e) => write!(f, "HTTP request build error: {}", e),
-            Error::SignatureError(msg) => write!(f, "AWS signature error: {}", msg),
-            Error::SerdeError(e) => write!(f, "Serialization error: {}", e),
+            Error::InvalidService(svc) => write!(f, "Invalid service: {}", svc),
             Error::AwsError { code, message } => write!(f, "AWS error [{}]: {}", code, message),
-            Error::ArnParseError(arn) => write!(f, "Invalid ARN: {}", arn),
             Error::HttpError(e) => write!(f, "HTTP error: {}", e),
             Error::HttpResponseError(e) => write!(f, "Failed to parse HTTP response: {}", e),
             Error::HttpResponseErrorParse(e) => write!(f, "Failed to parse HTTP response: {}", e),
@@ -31,6 +27,10 @@ impl fmt::Display for Error {
             Error::InvalidSecrets(params) => {
                 write!(f, "Unable to lookup secret values: {:?}", params)
             }
+            Error::SigningError(e) => {
+                write!(f, "Failed to sign request: {}", e)
+            }
+            Error::SerdeError(e) => write!(f, "Serialization error: {}", e),
         }
     }
 }
@@ -64,5 +64,11 @@ impl From<hyper::Error> for Error {
 impl From<serde_json::Error> for Error {
     fn from(err: serde_json::Error) -> Self {
         Error::SerdeError(err)
+    }
+}
+
+impl From<rotel::aws_api::error::Error> for Error {
+    fn from(err: rotel::aws_api::error::Error) -> Self {
+        Error::SigningError(err)
     }
 }

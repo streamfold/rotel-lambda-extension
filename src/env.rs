@@ -1,8 +1,8 @@
-use crate::aws_api::arn::AwsArn;
-use crate::aws_api::client::AwsClient;
-use crate::aws_api::config::AwsConfig;
-use crate::aws_api::{MAX_LOOKUP_LEN, PARAM_STORE_SERVICE, SECRETS_MANAGER_SERVICE};
+use crate::secrets::client::AwsClient;
+use crate::secrets::{MAX_LOOKUP_LEN, PARAM_STORE_SERVICE, SECRETS_MANAGER_SERVICE};
 use regex::Regex;
+use rotel::aws_api::arn::AwsArn;
+use rotel::aws_api::config::AwsConfig;
 use std::collections::HashMap;
 use tokio::time::Instant;
 use tower::BoxError;
@@ -77,11 +77,11 @@ pub async fn resolve_secrets(
     for (arn_str, _) in secure_arns.iter() {
         let arn = arn_str.parse::<AwsArn>()?;
 
-        if arn.service != SECRETS_MANAGER_SERVICE && arn.service != PARAM_STORE_SERVICE {
-            return Err(format!("Unknown secret ARN service name: {}", arn.service).into());
+        if arn.service() != SECRETS_MANAGER_SERVICE && arn.service() != PARAM_STORE_SERVICE {
+            return Err(format!("Unknown secret ARN service name: {}", arn.service()).into());
         }
 
-        if arn.service == PARAM_STORE_SERVICE && arn.resource_field != "" {
+        if arn.service() == PARAM_STORE_SERVICE && arn.resource_field() != "" {
             return Err(format!(
                 "JSON field selection not allowed for parameter store: {}",
                 arn.to_string()
@@ -99,11 +99,10 @@ pub async fn resolve_secrets(
             .into());
         }
 
-        let mut arn_without_field = arn.clone();
-        arn_without_field.resource_field = "".to_string();
+        let arn_without_field = arn.clone().set_resource_field("".to_string());
 
         arns_by_svc
-            .entry(arn.service.clone())
+            .entry(arn.service().clone())
             .or_insert_with(|| HashMap::new())
             .entry(arn_without_field)
             .or_insert_with(|| Vec::new())
@@ -134,7 +133,7 @@ pub async fn resolve_secrets(
                                 }
                                 Some(entry) => {
                                     for full_arn in entry {
-                                        if full_arn.resource_field == "" {
+                                        if full_arn.resource_field() == "" {
                                             secure_arns.insert(
                                                 full_arn.to_string(),
                                                 secret.secret_string.clone(),
@@ -145,10 +144,11 @@ pub async fn resolve_secrets(
                                         match serde_json::from_str::<HashMap<String, String>>(
                                             secret.secret_string.as_str(),
                                         ) {
-                                            Ok(json) => match json.get(&full_arn.resource_field) {
+                                            Ok(json) => match json.get(full_arn.resource_field()) {
                                                 None => return Err(format!(
                                                     "Secret JSON did not contain field {}: {:?}",
-                                                    full_arn.resource_field, full_arn
+                                                    full_arn.resource_field(),
+                                                    full_arn
                                                 )
                                                 .into()),
                                                 Some(value) => {
@@ -209,9 +209,9 @@ pub async fn resolve_secrets(
 
 #[cfg(test)]
 mod tests {
-    use crate::aws_api::config::AwsConfig;
     use crate::env::{EnvArnParser, resolve_secrets};
     use crate::test_util::{init_crypto, parse_test_arns};
+    use rotel::aws_api::config::AwsConfig;
     use std::collections::HashMap;
 
     #[test]
