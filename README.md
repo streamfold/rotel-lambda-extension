@@ -14,10 +14,10 @@ Choose the Lambda layer that matches your Lambda runtime architecture (**alpha**
 of the ARN should match the integer value from the latest [release](https://github.com/streamfold/rotel-lambda-extension/releases),
 so the version for `v12-alpha` would be `12`. 
 
-| Architecture | ARN                                                                              | Version                                                                                                                            |
-|--------------|----------------------------------------------------------------------------------|------------------------------------------------------------------------------------------------------------------------------------|
-| x86-64/amd64 | arn:aws:lambda:{region}:418653438961:layer:rotel-extension-amd64-alpha:{version} | ![Version](https://img.shields.io/github/v/release/streamfold/rotel-lambda-extension?filter=*alpha&label=version&cacheSeconds=600) |
-| arm64        | arn:aws:lambda:{region}:418653438961:layer:rotel-extension-arm64-alpha:{version} | ![Version](https://img.shields.io/github/v/release/streamfold/rotel-lambda-extension?filter=*alpha&label=version&cacheSeconds=600) |
+| Architecture | ARN                                                                              | Version                                                                                                                                                                 |
+|--------------|----------------------------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| x86-64/amd64 | arn:aws:lambda:{region}:418653438961:layer:rotel-extension-amd64-alpha:{version} | ![Version](https://img.shields.io/github/v/release/streamfold/rotel-lambda-extension?filter=*alpha&label=version&labelColor=%2338BDF8&color=%23312E81&cacheSeconds=600) |
+| arm64        | arn:aws:lambda:{region}:418653438961:layer:rotel-extension-arm64-alpha:{version} | ![Version](https://img.shields.io/github/v/release/streamfold/rotel-lambda-extension?filter=*alpha&label=version&labelColor=%2338BDF8&color=%23312E81&cacheSeconds=600) |
 
 The layer is deployed in the following AWS regions (if you don't see yours, let us know!):
 - us-east-{1, 2}, us-west-{1, 2}
