@@ -11,9 +11,9 @@ use lambda_extension::{LambdaTelemetryRecord, NextEvent};
 use rotel::aws_api::config::AwsConfig;
 use rotel::bounded_channel::bounded;
 use rotel::init::agent::Agent;
-use rotel::init::args;
 use rotel::init::args::{AgentRun, Exporter};
 use rotel::init::misc::bind_endpoints;
+use rotel::init::parse;
 use rotel::init::wait;
 use rotel::listener::Listener;
 use rotel::topology::flush_control::{FlushBroadcast, FlushSender};
@@ -54,7 +54,7 @@ pub const FLUSH_EXPORTERS_TIMEOUT_MILLIS: u64 = 3_000;
 #[command(name = "rotel-lambda-extension")]
 #[command(bin_name = "rotel-lambda-extension")]
 struct Arguments {
-    #[arg(long, env = "ROTEL_TELEMETRY_ENDPOINT", default_value = "0.0.0.0:8990", value_parser = args::parse_endpoint)]
+    #[arg(long, env = "ROTEL_TELEMETRY_ENDPOINT", default_value = "0.0.0.0:8990", value_parser = parse::parse_endpoint)]
     telemetry_endpoint: SocketAddr,
 
     #[arg(
@@ -237,27 +237,20 @@ async fn run_extension(
     let agent_cancel = CancellationToken::new();
     {
         // We control flushing manually, so set this to zero to disable the batch timer
-        agent_args.batch.batch_timeout = "0s".parse().unwrap();
+        agent_args.batch.batch_timeout = Duration::ZERO;
 
-        if agent_args.exporter == Exporter::Otlp {
-            if agent_args.otlp_exporter.otlp_exporter_endpoint.is_none()
-                && agent_args
-                    .otlp_exporter
-                    .otlp_exporter_traces_endpoint
-                    .is_none()
-                && agent_args
-                    .otlp_exporter
-                    .otlp_exporter_metrics_endpoint
-                    .is_none()
-                && agent_args
-                    .otlp_exporter
-                    .otlp_exporter_logs_endpoint
-                    .is_none()
+        // Catch the default no config mode and default to the blackhole exporter
+        // instead of failing to start
+        if agent_args.exporter.is_none() && agent_args.exporters.is_none() {
+            if agent_args.otlp_exporter.base.endpoint.is_none()
+                && agent_args.otlp_exporter.base.traces_endpoint.is_none()
+                && agent_args.otlp_exporter.base.metrics_endpoint.is_none()
+                && agent_args.otlp_exporter.base.logs_endpoint.is_none()
             {
                 // todo: We should be able to startup with no config and not fail, identify best
                 // default mode.
                 info!("Automatically selecting blackhole exporter due to missing endpoint configs");
-                agent_args.exporter = Exporter::Blackhole;
+                agent_args.exporter = Some(Exporter::Blackhole);
             }
         }
 
