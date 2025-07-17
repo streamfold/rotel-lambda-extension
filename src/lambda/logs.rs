@@ -86,6 +86,12 @@ pub(crate) fn parse_logs(resource: Resource, logs: Vec<Log>) -> Result<ResourceL
                         lr.body = Some(AnyValue {
                             value: Some(StringValue(msg)),
                         })
+                    } else if let Some(Value::Object(mut fields)) = rec.remove("fields") {
+                        if let Some(Value::String(msg)) = fields.remove("message") {
+                            lr.body = Some(AnyValue {
+                                value: Some(StringValue(msg)),
+                            })
+                        }
                     }
                 }
                 Value::String(rec) => {
@@ -271,6 +277,57 @@ mod tests {
 
         let res = parse_logs(r, logs);
         assert!(res.is_err())
+    }
+
+    #[test]
+    fn test_log_parse_fields() {
+        let now = SystemTime::now();
+        let tm1 = DateTime::from(now.sub(Duration::from_secs(3600)));
+        let tm2 = tm1.add(Duration::from_secs(60));
+        let mut r = Resource::default();
+        r.attributes
+            .push(otel_string_attr(SERVICE_NAME, "test_log_parse"));
+
+        let logs = vec![Log::Function(
+            tm1,
+            Value::Object(json_map(HashMap::from([
+                ("timestamp", Value::String(tm2.to_rfc3339())),
+                ("level", Value::String("warn".to_string())),
+                ("requestId", Value::String("1234abcd".to_string())),
+                (
+                    "fields",
+                    Value::Object(json_map(HashMap::from([(
+                        "message",
+                        Value::String("the message".to_string()),
+                    )]))),
+                ),
+            ]))),
+        )];
+
+        let mut res = parse_logs(r, logs).unwrap();
+
+        assert_eq!(1, res.scope_logs.len());
+        assert_eq!(1, res.scope_logs[0].log_records.len());
+
+        assert_eq!(
+            Some("test_log_parse".to_string()),
+            find_str_attr(&res.resource.unwrap().attributes, SERVICE_NAME)
+        );
+
+        let log1 = res.scope_logs[0].log_records.pop().unwrap();
+
+        assert_eq!(
+            tm2.timestamp_nanos_opt().unwrap() as u64,
+            log1.time_unix_nano
+        );
+        assert_eq!(
+            Some("1234abcd".to_string()),
+            find_str_attr(&log1.attributes, FAAS_INVOCATION_ID)
+        );
+        assert_eq!(
+            StringValue("the message".to_string()),
+            log1.body.unwrap().value.unwrap()
+        );
     }
 
     fn json_map(m: HashMap<&str, Value>) -> serde_json::Map<String, Value> {
