@@ -10,12 +10,14 @@ use tracing::{debug, warn};
 
 pub struct EnvArnParser {
     arn_sub_re: Regex,
+    secret_prefix_re: Regex,
 }
 
 impl EnvArnParser {
     pub fn new() -> Self {
         Self {
             arn_sub_re: Regex::new(r"\$\{(arn:[^}]+)}").unwrap(),
+            secret_prefix_re: Regex::new(r"^secret://(arn:.+)$").unwrap(),
         }
     }
 
@@ -26,7 +28,14 @@ impl EnvArnParser {
                 continue;
             }
 
+            // Check for ${arn:...} format
             for capture in self.arn_sub_re.captures_iter(v.as_str()) {
+                let matched = capture.get(1).unwrap().as_str().to_string();
+                sec_subs.insert(matched, "".to_string());
+            }
+
+            // Check for secret://arn:... format
+            if let Some(capture) = self.secret_prefix_re.captures(v.as_str()) {
                 let matched = capture.get(1).unwrap().as_str().to_string();
                 sec_subs.insert(matched, "".to_string());
             }
@@ -42,9 +51,12 @@ impl EnvArnParser {
                 continue;
             }
 
-            let result = self
+            let mut result = v.clone();
+
+            // Handle ${arn:...} format
+            result = self
                 .arn_sub_re
-                .replace_all(v.as_str(), |caps: &regex::Captures| {
+                .replace_all(result.as_str(), |caps: &regex::Captures| {
                     let matched = caps.get(1).unwrap().as_str();
 
                     match arn_map.get(matched) {
@@ -53,6 +65,14 @@ impl EnvArnParser {
                     }
                 })
                 .into_owned();
+
+            // Handle secret://arn:... format
+            if let Some(capture) = self.secret_prefix_re.captures(result.as_str()) {
+                let matched = capture.get(1).unwrap().as_str();
+                if let Some(secret_value) = arn_map.get(matched) {
+                    result = secret_value.clone();
+                }
+            }
 
             if v != result {
                 updates.insert(k, result);
@@ -221,19 +241,22 @@ mod tests {
         unsafe { std::env::set_var("ROTEL_MULTI", "${arn:test2} - ${arn:test3}") }
         unsafe { std::env::set_var("ROTEL_ALREADY_EXISTS", "Bearer ${arn:test2}") }
         unsafe { std::env::set_var("ROTEL_WONT_UPDATE", "empty:${arn:test4}") }
+        unsafe { std::env::set_var("ROTEL_SECRET_PREFIX", "secret://arn:test5") }
 
         let es = EnvArnParser::new();
         let mut hm = es.extract_arns_from_env();
 
-        assert_eq!(4, hm.len());
+        assert_eq!(5, hm.len());
         assert!(hm.contains_key("arn:test1"));
         assert!(hm.contains_key("arn:test2"));
         assert!(hm.contains_key("arn:test3"));
         assert!(hm.contains_key("arn:test4"));
+        assert!(hm.contains_key("arn:test5"));
 
         hm.insert("arn:test1".to_string(), "result-1".to_string());
         hm.insert("arn:test2".to_string(), "result-2".to_string());
         hm.insert("arn:test3".to_string(), "result-3".to_string());
+        hm.insert("arn:test5".to_string(), "secret-result".to_string());
 
         es.update_env_arn_secrets(hm);
 
@@ -245,12 +268,17 @@ mod tests {
             std::env::var("ROTEL_ALREADY_EXISTS").unwrap()
         );
         assert_eq!("empty:", std::env::var("ROTEL_WONT_UPDATE").unwrap());
+        assert_eq!(
+            "secret-result",
+            std::env::var("ROTEL_SECRET_PREFIX").unwrap()
+        );
 
         unsafe { std::env::remove_var("ROTEL_DONT_EXPAND") }
         unsafe { std::env::remove_var("ROTEL_SINGLE") }
         unsafe { std::env::remove_var("ROTEL_MULTI") }
         unsafe { std::env::remove_var("ROTEL_ALREADY_EXISTS") }
         unsafe { std::env::remove_var("ROTEL_WONT_UPDATE") }
+        unsafe { std::env::remove_var("ROTEL_SECRET_PREFIX") }
     }
 
     #[tokio::test]

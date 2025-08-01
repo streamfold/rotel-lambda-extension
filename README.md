@@ -100,6 +100,19 @@ ROTEL_OTLP_EXPORTER_PROTOCOL=http
 ROTEL_OTLP_EXPORTER_CUSTOM_HEADERS="Authorization=Bearer ${arn:aws:ssm:us-east-1:123377354456:parameter/axiom-api-key},X-Axiom-Dataset=${AXIOM_DATASET}"
 ```
 
+**URI Format**
+
+In addition to the `${arn:...}` format, you can also use a URI format with the prefix `secret://`. This can be easier to use in configuration
+formats that reserve the `${..}` syntax for variable interpolation. The URI format must be set at the beginning of the variable name, so:
+```shell
+ROTEL_CLICKHOUSE_EXPORTER_PASSWORD="secret://arn:aws:ssm:us-east-1:123377354456:parameter/clickhouse-password"
+```
+
+This supports the `#query` format as well to extract JSON secrets:
+```shell
+ROTEL_CLICKHOUSE_EXPORTER_PASSWORD="secret://arn:aws:secretsmanager:us-east-1:123377354456:secret:ch-creds-r1l7G9#password"
+```
+
 **Permissions:**
 
 You must ensure the following IAM permissions exist for your Lambda runtime execution role:
