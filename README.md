@@ -1,6 +1,6 @@
 # Rotel Lambda Extension
 
-Rotel Lambda Extension is an advanced AWS Lambda extension layer, built on top of [Rotel](https://github.com/streamfold/rotel)—a lightweight, high-performance and low overhead OpenTelemetry Collector perfectly suited for resource-constrained environments. By minimizing binary size, reducing cold start latency, and lowering memory overhead, this extension optimizes performance and cost efficiency in AWS Lambda deployments.
+Rotel Lambda Extension is an advanced AWS Lambda extension layer, built on top of [Rotel](https://github.com/streamfold/rotel). Rotel is lightweight and perfectly suited for collecting OpenTelemetry data in resource-constrained environments. By minimizing binary size, reducing cold start latency, and lowering memory overhead, this extension optimizes performance and cost efficiency in AWS Lambda deployments.
 
 ![Coldstart Comparison](/contrib/coldstarts.png)
 
@@ -43,7 +43,7 @@ To see how this works in practice, check out this Node.js
 ## Configuration
 
 The Rotel Lambda Extension is configured using the same environment variables documented
-for the Rotel collector,
+for Rotel,
 [documented here](https://github.com/streamfold/rotel?tab=readme-ov-file#configuration).
 
 To ease configuration for Lambda environments, you can set `ROTEL_ENV_FILE` to the path
