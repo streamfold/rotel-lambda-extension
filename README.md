@@ -74,7 +74,7 @@ ROTEL_OTLP_EXPORTER_CUSTOM_HEADERS="Authorization=Bearer ${arn:aws:secretsmanage
 ```
 
 Secrets retrieved from AWS Secrets Manager also support JSON encoded secret key/value pairs. The secret
-value can be retrieved by suffixing the ARN with a `#key-name` where `key-name` is the top-level JSON key. For example,
+value can be retrieved by suffixing the ARN with a `#json-key` where `json-key` is the top-level JSON key. For example,
 if the secret named `axiom-r1l7G9` contained:
 
 ```json
@@ -108,7 +108,7 @@ formats that reserve the `${..}` syntax for variable interpolation. The URI form
 ROTEL_CLICKHOUSE_EXPORTER_PASSWORD="secret://arn:aws:ssm:us-east-1:123377354456:parameter/clickhouse-password"
 ```
 
-This supports the `#query` format as well to extract JSON secrets:
+This supports the `#json-key` format as well to extract JSON secrets:
 ```shell
 ROTEL_CLICKHOUSE_EXPORTER_PASSWORD="secret://arn:aws:secretsmanager:us-east-1:123377354456:secret:ch-creds-r1l7G9#password"
 ```
