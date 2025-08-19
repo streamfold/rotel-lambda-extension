@@ -2017,7 +2017,7 @@ dependencies = [
 [[package]]
 name = "rotel"
 version = "0.0.1-alpha10"
-source = "git+https://github.com/streamfold/rotel?rev=cdf105e6de727f0034bdb4da1edb9a9a65b0fd50#cdf105e6de727f0034bdb4da1edb9a9a65b0fd50"
+source = "git+https://github.com/streamfold/rotel?rev=535a5797fa1c8ea343b22b5c407b5ba6dd239f88#535a5797fa1c8ea343b22b5c407b5ba6dd239f88"
 dependencies = [
  "bstr",
  "bytes",

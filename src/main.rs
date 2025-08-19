@@ -117,8 +117,8 @@ fn main() -> ExitCode {
 
     let agent = opt.agent_args;
     let mut port_map = match bind_endpoints(&[
-        agent.otlp_grpc_endpoint,
-        agent.otlp_http_endpoint,
+        agent.otlp_receiver.otlp_grpc_endpoint,
+        agent.otlp_receiver.otlp_http_endpoint,
         opt.telemetry_endpoint,
     ]) {
         Ok(ports) => ports,
