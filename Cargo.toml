@@ -23,7 +23,7 @@ futures = "0.3.31"
 tower-http = { version = "0.6.2", features = ["limit", "trace", "compression-gzip", "validate-request"] }
 dotenvy = { git = "https://github.com/streamfold/dotenvy", branch = "custom-substitution" }
 rustls = "0.23.20"
-tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }
+tracing-subscriber = { version = "0.3.20", features = ["env-filter"] }
 tracing-appender = "0.2.3"
 tower = { version = "0.5.2", features = ["retry", "timeout"] }
 rotel = { git = "https://github.com/streamfold/rotel", rev = "1b65d7a99844abeedd94f2d33e9396062c7bd260" }
