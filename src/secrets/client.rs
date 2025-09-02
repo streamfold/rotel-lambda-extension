@@ -30,12 +30,12 @@ impl AwsClient {
     }
 
     /// Get an instance of the SecretsManager service
-    pub fn secrets_manager(&self) -> SecretsManager {
+    pub fn secrets_manager(&self) -> SecretsManager<'_> {
         SecretsManager::new(self)
     }
 
     /// Get an instance of the ParameterStore service
-    pub fn parameter_store(&self) -> ParameterStore {
+    pub fn parameter_store(&self) -> ParameterStore<'_> {
         ParameterStore::new(self)
     }
 
