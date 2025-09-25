@@ -1,2 +1,3 @@
 [toolchain]
 channel = "1.89"
+targets = ["x86_64-unknown-linux-gnu", "aarch64-unknown-linux-gnu"]
