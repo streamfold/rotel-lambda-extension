@@ -10,23 +10,23 @@ use hyper_rustls::HttpsConnector;
 use hyper_util::client::legacy::Client as HyperClient;
 use hyper_util::client::legacy::connect::HttpConnector;
 use hyper_util::rt::{TokioExecutor, TokioTimer};
-use rotel::aws_api::config::AwsConfig;
+use rotel::aws_api::creds::AwsCreds;
 use rustls::ClientConfig;
 use std::time::Duration;
 use tower::BoxError;
 
 /// Main client for AWS services
 pub struct AwsClient {
-    pub(crate) config: AwsConfig,
+    pub(crate) creds: AwsCreds,
     client: HyperClient<HttpsConnector<HttpConnector>, Full<Bytes>>,
 }
 
 impl AwsClient {
     /// Create a new AWS client
-    pub fn new(config: AwsConfig) -> Result<Self, BoxError> {
+    pub fn new(creds: AwsCreds) -> Result<Self, BoxError> {
         let client = build_hyper_client()?;
 
-        Ok(Self { client, config })
+        Ok(Self { client, creds })
     }
 
     /// Get an instance of the SecretsManager service

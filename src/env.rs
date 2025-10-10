@@ -2,7 +2,7 @@ use crate::secrets::client::AwsClient;
 use crate::secrets::{MAX_LOOKUP_LEN, PARAM_STORE_SERVICE, SECRETS_MANAGER_SERVICE};
 use regex::Regex;
 use rotel::aws_api::arn::AwsArn;
-use rotel::aws_api::config::AwsConfig;
+use rotel::aws_api::creds::AwsCreds;
 use std::collections::HashMap;
 use tokio::time::Instant;
 use tower::BoxError;
@@ -86,12 +86,12 @@ impl EnvArnParser {
 }
 
 pub async fn resolve_secrets(
-    aws_config: &AwsConfig,
+    aws_creds: AwsCreds,
     secure_arns: &mut HashMap<String, String>,
 ) -> Result<(), BoxError> {
     let secrets_start = Instant::now();
 
-    let client = AwsClient::new(aws_config.clone())?;
+    let client = AwsClient::new(aws_creds)?;
 
     let mut arns_by_svc = HashMap::new();
     for (arn_str, _) in secure_arns.iter() {
@@ -229,9 +229,10 @@ pub async fn resolve_secrets(
 
 #[cfg(test)]
 mod tests {
+    use rotel::aws_api::creds::AwsCreds;
+
     use crate::env::{EnvArnParser, resolve_secrets};
     use crate::test_util::{init_crypto, parse_test_arns};
-    use rotel::aws_api::config::AwsConfig;
     use std::collections::HashMap;
 
     #[test]
@@ -300,7 +301,7 @@ mod tests {
             test_arn_map.insert(test_arn.clone(), "".to_string());
         }
 
-        let res = resolve_secrets(&AwsConfig::from_env(), &mut test_arn_map).await;
+        let res = resolve_secrets(AwsCreds::from_env(), &mut test_arn_map).await;
         assert!(res.is_ok());
 
         for (test_arn, test_value) in test_arns {
@@ -325,7 +326,7 @@ mod tests {
             let mut test_arn_map = HashMap::new();
             test_arn_map.insert(test_arn.clone(), "".to_string());
 
-            let res = resolve_secrets(&AwsConfig::from_env(), &mut test_arn_map).await;
+            let res = resolve_secrets(AwsCreds::from_env(), &mut test_arn_map).await;
             assert!(res.is_err());
         }
     }

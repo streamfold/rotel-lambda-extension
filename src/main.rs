@@ -8,7 +8,7 @@ use hyper_util::client::legacy::Client;
 use hyper_util::client::legacy::connect::HttpConnector;
 use hyper_util::rt::{TokioExecutor, TokioTimer};
 use lambda_extension::{LambdaTelemetryRecord, NextEvent};
-use rotel::aws_api::config::AwsConfig;
+use rotel::aws_api::creds::AwsCreds;
 use rotel::bounded_channel::bounded;
 use rotel::init::agent::Agent;
 use rotel::init::args::{AgentRun, Exporter};
@@ -205,7 +205,7 @@ async fn run_extension(
     let (bus_tx, mut bus_rx) = bounded(10);
     let (logs_tx, logs_rx) = bounded(LOGS_QUEUE_SIZE);
 
-    let aws_config = AwsConfig::from_env();
+    let aws_creds = AwsCreds::from_env();
 
     //
     // Resolve secrets
@@ -219,7 +219,7 @@ async fn run_extension(
                 .unwrap();
         }
 
-        resolve_secrets(&aws_config, &mut secure_arns).await?;
+        resolve_secrets(aws_creds.clone(), &mut secure_arns).await?;
         es.update_env_arn_secrets(secure_arns);
 
         // We must reparse arguments now that the environment has been updated
