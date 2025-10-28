@@ -118,13 +118,14 @@ impl<'a> ParameterStore<'a> {
             );
 
             // Sign the request
-            let signer = AwsRequestSigner::new(
-                self.service_name,
-                arns[0].region(),
-                self.client.config.clone(),
-                SystemClock,
-            );
-            let signed_request = signer.sign(endpoint, Method::POST, hdrs, payload_bytes)?;
+            let signer = AwsRequestSigner::new(self.service_name, arns[0].region(), SystemClock);
+            let signed_request = signer.sign(
+                endpoint,
+                Method::POST,
+                hdrs,
+                payload_bytes,
+                &self.client.creds,
+            )?;
 
             // Send the request
             let response = self.client.perform(signed_request).await?;
@@ -160,9 +161,10 @@ impl<'a> ParameterStore<'a> {
 
 #[cfg(test)]
 mod tests {
+    use rotel::aws_api::creds::AwsCreds;
+
     use super::*;
     use crate::test_util::{init_crypto, parse_test_arns};
-    use rotel::aws_api::config::AwsConfig;
 
     #[tokio::test]
     async fn test_basic_paramstore_retrieval() {
@@ -178,7 +180,7 @@ mod tests {
 
         init_crypto();
 
-        let client = AwsClient::new(AwsConfig::from_env()).unwrap();
+        let client = AwsClient::new(AwsCreds::from_env()).unwrap();
 
         let ps = client.parameter_store();
 
