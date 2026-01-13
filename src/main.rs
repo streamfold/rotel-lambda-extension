@@ -47,6 +47,7 @@ pub const SENDING_QUEUE_SIZE: usize = 10;
 
 pub const LOGS_QUEUE_SIZE: usize = 50;
 
+pub const FLUSH_LOGS_TIMEOUT_MILLIS: u64 = 100; // can be short, simply forces biased select ordering
 pub const FLUSH_PIPELINE_TIMEOUT_MILLIS: u64 = 500;
 pub const FLUSH_EXPORTERS_TIMEOUT_MILLIS: u64 = 3_000;
 
@@ -231,6 +232,7 @@ async fn run_extension(
         Err(e) => return Err(format!("Failed to register extension: {}", e).into()),
     };
 
+    let (mut flush_logs_tx, flush_logs_sub) = FlushBroadcast::new().into_parts();
     let (mut flush_pipeline_tx, flush_pipeline_sub) = FlushBroadcast::new().into_parts();
     let (mut flush_exporters_tx, flush_exporters_sub) = FlushBroadcast::new().into_parts();
 
@@ -255,7 +257,7 @@ async fn run_extension(
         }
 
         let agent = Agent::new(agent_args, port_map, SENDING_QUEUE_SIZE, env.clone())
-            .with_logs_rx(logs_rx)
+            .with_logs_rx(logs_rx, flush_logs_sub)
             .with_pipeline_flush(flush_pipeline_sub)
             .with_exporters_flush(flush_exporters_sub);
         let token = agent_cancel.clone();
@@ -332,7 +334,7 @@ async fn run_extension(
                             }
                         },
                         _ = default_flush_interval.tick() => {
-                            force_flush(&mut flush_pipeline_tx, &mut flush_exporters_tx, &mut default_flush_interval).await;
+                            force_flush(&mut flush_logs_tx, &mut flush_pipeline_tx, &mut flush_exporters_tx, &mut default_flush_interval).await;
                         }
                     }
                 }
@@ -341,6 +343,7 @@ async fn run_extension(
                 // Force a flush
                 //
                 force_flush(
+                    &mut flush_logs_tx,
                     &mut flush_pipeline_tx,
                     &mut flush_exporters_tx,
                     &mut default_flush_interval,
@@ -361,6 +364,7 @@ async fn run_extension(
                 // function invocation.
                 if control.should_flush() {
                     force_flush(
+                        &mut flush_logs_tx,
                         &mut flush_pipeline_tx,
                         &mut flush_exporters_tx,
                         &mut default_flush_interval,
@@ -410,7 +414,7 @@ async fn run_extension(
                         },
 
                         _ = default_flush_interval.tick() => {
-                            force_flush(&mut flush_pipeline_tx, &mut flush_exporters_tx, &mut default_flush_interval).await;
+                            force_flush(&mut flush_logs_tx, &mut flush_pipeline_tx, &mut flush_exporters_tx, &mut default_flush_interval).await;
                         }
                     }
                 }
@@ -439,14 +443,35 @@ async fn run_extension(
 }
 
 async fn force_flush(
+    logs_tx: &mut FlushSender,
     pipeline_tx: &mut FlushSender,
     exporters_tx: &mut FlushSender,
     default_flush: &mut Interval,
 ) {
     let start = Instant::now();
     match timeout(
+        Duration::from_millis(FLUSH_LOGS_TIMEOUT_MILLIS),
+        logs_tx.broadcast(None),
+    )
+    .await
+    {
+        Err(_) => {
+            warn!("timeout waiting to logs");
+            return;
+        }
+        Ok(Err(e)) => {
+            warn!("failed to flush logs: {}", e);
+            return;
+        }
+        _ => {}
+    }
+    let duration = Instant::now().duration_since(start);
+    debug!(?duration, "finished flushing logs");
+
+    let start = Instant::now();
+    match timeout(
         Duration::from_millis(FLUSH_PIPELINE_TIMEOUT_MILLIS),
-        pipeline_tx.broadcast(),
+        pipeline_tx.broadcast(None),
     )
     .await
     {
@@ -466,7 +491,7 @@ async fn force_flush(
     let start = Instant::now();
     match timeout(
         Duration::from_millis(FLUSH_EXPORTERS_TIMEOUT_MILLIS),
-        exporters_tx.broadcast(),
+        exporters_tx.broadcast(None),
     )
     .await
     {

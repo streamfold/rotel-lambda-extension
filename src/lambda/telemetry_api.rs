@@ -18,6 +18,7 @@ use opentelemetry_semantic_conventions::resource::{
 use opentelemetry_semantic_conventions::trace::FAAS_INVOKED_REGION;
 use rotel::bounded_channel::BoundedSender;
 use rotel::listener::Listener;
+use rotel::topology::payload::Message;
 use std::fmt::{Debug, Display};
 use std::future::Future;
 use std::net::SocketAddr;
@@ -37,11 +38,11 @@ static LOG_LIMIT_LAST_LOG: LazyLock<Mutex<Option<Instant>>> = LazyLock::new(|| M
 
 pub struct TelemetryAPI {
     pub listener: Listener,
-    pub logs_tx: BoundedSender<ResourceLogs>,
+    pub logs_tx: BoundedSender<Message<ResourceLogs>>,
 }
 
 impl TelemetryAPI {
-    pub fn new(listener: Listener, logs_tx: BoundedSender<ResourceLogs>) -> Self {
+    pub fn new(listener: Listener, logs_tx: BoundedSender<Message<ResourceLogs>>) -> Self {
         Self { listener, logs_tx }
     }
 
@@ -119,14 +120,14 @@ impl TelemetryAPI {
 pub struct TelemetryService {
     resource: Resource,
     bus_tx: BoundedSender<LambdaTelemetry>,
-    logs_tx: BoundedSender<ResourceLogs>,
+    logs_tx: BoundedSender<Message<ResourceLogs>>,
 }
 
 impl TelemetryService {
     fn new(
         resource: Resource,
         bus_tx: BoundedSender<LambdaTelemetry>,
-        logs_tx: BoundedSender<ResourceLogs>,
+        logs_tx: BoundedSender<Message<ResourceLogs>>,
     ) -> Self {
         Self {
             resource,
@@ -182,7 +183,7 @@ where
 
 async fn handle_request<H>(
     bus_tx: BoundedSender<LambdaTelemetry>,
-    logs_tx: BoundedSender<ResourceLogs>,
+    logs_tx: BoundedSender<Message<ResourceLogs>>,
     resource: Resource,
     body: H,
 ) -> Result<Response<Full<Bytes>>, BoxError>
@@ -230,7 +231,7 @@ where
         let logs = parse_logs(resource, log_events);
         match logs {
             Ok(rl) => {
-                if let Err(e) = logs_tx.send(rl).await {
+                if let Err(e) = logs_tx.send(Message::new(None, vec![rl], None)).await {
                     log_with_limit(move || warn!("Failed to send logs: {}", e));
                 }
             }
