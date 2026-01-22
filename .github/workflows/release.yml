@@ -116,6 +116,7 @@ jobs:
         run: |
           cargo lambda deploy --extension --region ${{matrix.region}} --lambda-dir target/lambda/${{ matrix.arch }} \
             --compatible-runtimes provided.al2023 --binary-name rotel-extension \
+            --description "Tag=${{ github.event.release.tag_name }}" \
             "rotel-extension${EXT_ARCH_SUFFIX}" | tee -a /tmp/lambda-deploy.out
 
       - name: publish release
