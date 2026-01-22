@@ -4,22 +4,23 @@ Rotel Lambda Extension is an advanced AWS Lambda extension layer, built on top o
 
 ![Coldstart Comparison](/contrib/coldstarts.png)
 
-_This chart compares cold start times between Rotel, the [OpenTelemetry Lambda](https://github.com/open-telemetry/opentelemetry-lambda/blob/main/collector/README.md), and the [Datadog OTEL Lambda](https://docs.datadoghq.com/serverless/aws_lambda/opentelemetry/?tab=python) layers. Check out the benchmark code [here](https://github.com/streamfold/python-lambda-benchmark)._ 
+_This chart compares cold start times between Rotel, the [OpenTelemetry Lambda](https://github.com/open-telemetry/opentelemetry-lambda/blob/main/collector/README.md), and the [Datadog OTEL Lambda](https://docs.datadoghq.com/serverless/aws_lambda/opentelemetry/?tab=python) layers. Check out the benchmark code [here](https://github.com/streamfold/python-lambda-benchmark)._
 
-The Rotel Lambda Extension integrates with the Lambda [TelemetryAPI](https://docs.aws.amazon.com/lambda/latest/dg/telemetry-api.html) to collect **function logs** and **extension logs** and will export them to the configured exporter. This can reduce your Lambda observability costs if you combine it with [disabling CloudWatch Logs](#disabling-cloudwatch-logs). 
+The Rotel Lambda Extension integrates with the Lambda [TelemetryAPI](https://docs.aws.amazon.com/lambda/latest/dg/telemetry-api.html) to collect **function logs** and **extension logs** and will export them to the configured exporter. This can reduce your Lambda observability costs if you combine it with [disabling CloudWatch Logs](#disabling-cloudwatch-logs).
 
 ## Using
 
-Choose the Lambda layer that matches your Lambda runtime architecture (**alpha** versions shown). The `{version}` field
-of the ARN should match the integer value from the latest [release](https://github.com/streamfold/rotel-lambda-extension/releases),
-so the version for `v12-alpha` would be `12`. 
+Choose the Lambda layer that matches your Lambda runtime architecture. The `{version}` field
+is dependent on the AWS region that you are deploying into. Check the [releases](https://github.com/streamfold/rotel-lambda-extension/releases)
+page for the latest version numbers that correspond to your region.
 
-| Architecture | ARN                                                                                | Version                                                                                                                                                                 |
-|--------------|------------------------------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| x86-64/amd64 | `arn:aws:lambda:{region}:418653438961:layer:rotel-extension-amd64-alpha:{version}` | ![Version](https://img.shields.io/github/v/release/streamfold/rotel-lambda-extension?filter=*alpha&label=version&labelColor=%2338BDF8&color=%23312E81&cacheSeconds=600) |
-| arm64        | `arn:aws:lambda:{region}:418653438961:layer:rotel-extension-arm64-alpha:{version}` | ![Version](https://img.shields.io/github/v/release/streamfold/rotel-lambda-extension?filter=*alpha&label=version&labelColor=%2338BDF8&color=%23312E81&cacheSeconds=600) |
+| Architecture | ARN                                                                          |
+| ------------ | ---------------------------------------------------------------------------- |
+| x86-64/amd64 | `arn:aws:lambda:{region}:418653438961:layer:rotel-extension-amd64:{version}` |
+| arm64        | `arn:aws:lambda:{region}:418653438961:layer:rotel-extension-arm64:{version}` |
 
 The layer is deployed in the following AWS regions (if you don't see yours, let us know!):
+
 - us-east-{1, 2}, us-west-{1, 2}
 - eu-central-1, eu-north-1, eu-west-{1, 2, 3}
 - ca-central-1
@@ -38,7 +39,7 @@ The Rotel Lambda layer can be used alongside the language support extension laye
 To use a language layer, pick the extension layer ARN that matches your runtime language and include it **in addition** to the Rotel layer ARN above. You will need to set `AWS_LAMBDA_EXEC_WRAPPER` so that your code is auto-instrumented on start up. Make sure to consult the documentation for your instrumentation layer.
 
 To see how this works in practice, check out this Node.js
-[example ✨](https://github.com/streamfold/nodejs-aws-lambda-example). 
+[example ✨](https://github.com/streamfold/nodejs-aws-lambda-example).
 
 ## Configuration
 
@@ -50,6 +51,7 @@ To ease configuration for Lambda environments, you can set `ROTEL_ENV_FILE` to t
 name of a file and that file will be interpreted as an `.env` file. For example, set
 `ROTEL_ENV_FILE=/var/task/rotel.env` and include the following `rotel.env` file in your
 function bundle:
+
 ```shell
 ROTEL_OTLP_EXPORTER_ENDPOINT=https://api.axiom.co
 ROTEL_OTLP_EXPORTER_PROTOCOL=http
@@ -85,12 +87,12 @@ if the secret named `axiom-r1l7G9` contained:
 ```
 
 Then the following example would extract those values:
+
 ```shell
 ROTEL_OTLP_EXPORTER_ENDPOINT=https://api.axiom.co
 ROTEL_OTLP_EXPORTER_PROTOCOL=http
 ROTEL_OTLP_EXPORTER_CUSTOM_HEADERS="Authorization=Bearer ${arn:aws:secretsmanager:us-east-1:123377354456:secret:axiom-r1l7G9#key},X-Axiom-Dataset=${arn:aws:secretsmanager:us-east-1:123377354456:secret:axiom-r1l7G9#dataset}"
 ```
-
 
 **AWS Parameter Store Example**
 
@@ -104,11 +106,13 @@ ROTEL_OTLP_EXPORTER_CUSTOM_HEADERS="Authorization=Bearer ${arn:aws:ssm:us-east-1
 
 In addition to the `${arn:...}` format, you can also use a URI format with the prefix `secret://`. This can be easier to use in configuration
 formats that reserve the `${..}` syntax for variable interpolation. The URI format must be set at the beginning of the variable name, so:
+
 ```shell
 ROTEL_CLICKHOUSE_EXPORTER_PASSWORD="secret://arn:aws:ssm:us-east-1:123377354456:parameter/clickhouse-password"
 ```
 
 This supports the `#json-key` format as well to extract JSON secrets:
+
 ```shell
 ROTEL_CLICKHOUSE_EXPORTER_PASSWORD="secret://arn:aws:secretsmanager:us-east-1:123377354456:secret:ch-creds-r1l7G9#password"
 ```
@@ -117,13 +121,13 @@ ROTEL_CLICKHOUSE_EXPORTER_PASSWORD="secret://arn:aws:secretsmanager:us-east-1:12
 
 You must ensure the following IAM permissions exist for your Lambda runtime execution role:
 
-* Secrets Manager
+- Secrets Manager
   - [`secretsmanager:GetSecretValue`](https://docs.aws.amazon.com/secretsmanager/latest/apireference/API_GetSecretValue.html)
   - [`secretsmanager:BatchGetSecretValue`](https://docs.aws.amazon.com/secretsmanager/latest/apireference/API_BatchGetSecretValue.html)
-* Parameter Store
+- Parameter Store
   - [`ssm:GetParameters`](https://docs.aws.amazon.com/systems-manager/latest/APIReference/API_GetParameters.html)
 
-Secrets must be stored as a plaintext secret string value for AWS Secrets Manager and as a SecureString for AWS Parameter Store. 
+Secrets must be stored as a plaintext secret string value for AWS Secrets Manager and as a SecureString for AWS Parameter Store.
 
 **NOTE**:
 
@@ -161,7 +165,7 @@ By default, AWS Lambda will send all Lambda logs to Amazon CloudWatch. To reduce
 
 This extension uses an **adaptive flushing model**, similar to the one implemented in [Datadog's new Rust Lambda extension](https://www.datadoghq.com/blog/engineering/datadog-lambda-extension-rust/).
 
-On the initial invocation after a cold start, the extension flushes all telemetry data **at the end** of each function invocation. This ensures minimal delay in telemetry availability. However, because the flush happens *after* the invocation completes, it can slightly increase the billed duration of the function.
+On the initial invocation after a cold start, the extension flushes all telemetry data **at the end** of each function invocation. This ensures minimal delay in telemetry availability. However, because the flush happens _after_ the invocation completes, it can slightly increase the billed duration of the function.
 
 If the extension detects a regular invocation pattern—such as invocations occurring at least once per minute—it will switch to **periodic flushing at the start** of each invocation. This overlaps the flush operation with the function’s execution time, reducing the likelihood of added billed duration due to telemetry flushing.
 
@@ -171,8 +175,8 @@ For long-running invocations, a **global backup timer** is used to flush telemet
 
 These are example repos demonstrating how to use the Rotel Lambda Extension.
 
-* [Node.js Auto Instrumentation](https://github.com/streamfold/nodejs-aws-lambda-example): This uses the Node.js auto instrumentation [layer](https://github.com/open-telemetry/opentelemetry-lambda/blob/main/nodejs/README.md) to instrument a Node.js app and emit metrics, logs and traces to Honeycomb.
-* [Python + Clickhouse](https://github.com/streamfold/python-aws-lambda-clickhouse-example): Python application with manual OpenTelemetry instrumentation, sending OpenTelemetry traces and logs to Clickhouse. All Lambda logs are converted to OTel and immediately sent to Clickhouse, so this can avoid expensive Cloudwatch log costs. This example uses the JSON data type by default to improve the query support for OTel key/value attributes.
+- [Node.js Auto Instrumentation](https://github.com/streamfold/nodejs-aws-lambda-example): This uses the Node.js auto instrumentation [layer](https://github.com/open-telemetry/opentelemetry-lambda/blob/main/nodejs/README.md) to instrument a Node.js app and emit metrics, logs and traces to Honeycomb.
+- [Python + Clickhouse](https://github.com/streamfold/python-aws-lambda-clickhouse-example): Python application with manual OpenTelemetry instrumentation, sending OpenTelemetry traces and logs to Clickhouse. All Lambda logs are converted to OTel and immediately sent to Clickhouse, so this can avoid expensive Cloudwatch log costs. This example uses the JSON data type by default to improve the query support for OTel key/value attributes.
 
 ## Community
 
