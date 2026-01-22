@@ -182,6 +182,10 @@ Want to chat about this project, share feedback, or suggest improvements? Join o
 
 See [DEVELOPING](/DEVELOPING.md) for developer instructions.
 
+## Releasing
+
+See [RELEASING](/RELEASING.md) for release process instructions.
+
 ---
 
 Built with ❤️ by Streamfold.
