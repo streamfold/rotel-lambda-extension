@@ -66,9 +66,9 @@ for region in "${REGIONS[@]}"; do
     # Check each architecture
     for arch in "${ARCHS[@]}"; do
         if [ "$arch" == "x86-64" ]; then
-            layer_name="rotel-extension-amd64-alpha"
+            layer_name="rotel-extension-amd64"
         else
-            layer_name="rotel-extension-arm64-alpha"
+            layer_name="rotel-extension-arm64"
         fi
 
         echo "  Checking layer: $layer_name"
@@ -107,9 +107,17 @@ cat > "$TMP_MD" << 'MDEOF'
 This layer can be installed with the following Lambda layer ARNs, choose the right architecture and the
 right version for your region based on the table below.
 
-- \`x86-64\`/\`amd64\`: \`arn:aws:lambda:{region}:418653438961:layer:rotel-extension-amd64:{version}\`
-- \`arm64\`: \`arn:aws:lambda:{region}:418653438961:layer:rotel-extension-arm64:{version}\`
+### `x86-64`/`amd64`
+```
+arn:aws:lambda:{region}:418653438961:layer:rotel-extension-amd64:{version}
+```
 
+### `arm64`
+```
+arn:aws:lambda:{region}:418653438961:layer:rotel-extension-arm64:{version}
+```
+
+### Region versions
 
 | Region | x86-64 | arm64 |
 |--------|--------|-------|
