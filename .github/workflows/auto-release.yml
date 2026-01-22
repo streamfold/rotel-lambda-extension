@@ -74,7 +74,7 @@ jobs:
           PR_LIST=""
 
           # Get merge commits between previous tag and current tag
-          MERGE_COMMITS=$(git log ${PREV_TAG}..${TAG_NAME} --merges --pretty=format:"%H %s" | grep "Merge pull request #")
+          MERGE_COMMITS=$(git log ${PREV_TAG}..${TAG_NAME} --merges --pretty=format:"%H %s" | grep "Merge pull request #" || echo "")
 
           if [ -n "$MERGE_COMMITS" ]; then
             while IFS= read -r commit_line; do
