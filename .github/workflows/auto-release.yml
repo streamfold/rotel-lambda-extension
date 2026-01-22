@@ -95,8 +95,6 @@ jobs:
 
           # Generate basic release notes
           cat > release_notes.md << EOFNOTES
-          ## Release $VERSION
-
           ### What's Changed
 
           EOFNOTES
@@ -112,7 +110,9 @@ jobs:
 
           # Add full changelog link
           cat >> release_notes.md << EOFNOTES
-          **Full Changelog**: [${PREV_TAG}...${TAG_NAME}](https://github.com/${{ github.repository }}/compare/${PREV_TAG}...${TAG_NAME})
+          ### Full Changelog
+
+          [${PREV_TAG}...${TAG_NAME}](https://github.com/${{ github.repository }}/compare/${PREV_TAG}...${TAG_NAME})
 
           EOFNOTES
 
