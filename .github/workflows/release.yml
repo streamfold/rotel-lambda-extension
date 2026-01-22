@@ -59,6 +59,7 @@ jobs:
         arch: [x86-64, arm64]
         # Note: As we expand these we may need to pre-create the old version numbers so that the
         # latest lambda layer version matches across all regions. See DEVELOPING.md.
+        # Must keep this list in sync with scripts/update-release-layer-versions.sh
         region:
           [
             us-east-1,
@@ -120,3 +121,26 @@ jobs:
       - name: publish release
         run: |
           ./scripts/publish-lambda-version.sh $( grep 'extension arn' /tmp/lambda-deploy.out  | awk '{print $4}' )
+
+  update-release-notes:
+    name: Update release notes with layer versions
+    needs: [release]
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_LAMBDA_DEPLOY_ROLE_ARN }}
+          aws-region: us-east-1
+
+      - name: Update release with layer versions
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          ./scripts/update-release-layer-versions.sh "${{ github.event.release.tag_name }}"
