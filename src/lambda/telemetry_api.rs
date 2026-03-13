@@ -31,6 +31,8 @@ use tokio_util::sync::CancellationToken;
 use tower::{BoxError, Service, ServiceBuilder};
 use tracing::{debug, error, warn};
 
+type JsonLambdaTelemetry = LambdaTelemetry<serde_json::Value>;
+
 // We don't want to create a logging loop, so limit how often we log
 // failures in certain code paths that may loop.
 const LOG_LIMIT_INTERVAL_SECS: u64 = 60;
@@ -53,7 +55,7 @@ impl TelemetryAPI {
     // todo: abstract this with the server code in the otlp http receiver
     pub async fn run(
         self,
-        bus_tx: BoundedSender<LambdaTelemetry>,
+        bus_tx: BoundedSender<JsonLambdaTelemetry>,
         cancellation: CancellationToken,
     ) -> Result<(), BoxError> {
         let resource = resource_from_env();
@@ -119,14 +121,14 @@ impl TelemetryAPI {
 #[derive(Clone)]
 pub struct TelemetryService {
     resource: Resource,
-    bus_tx: BoundedSender<LambdaTelemetry>,
+    bus_tx: BoundedSender<JsonLambdaTelemetry>,
     logs_tx: BoundedSender<Message<ResourceLogs>>,
 }
 
 impl TelemetryService {
     fn new(
         resource: Resource,
-        bus_tx: BoundedSender<LambdaTelemetry>,
+        bus_tx: BoundedSender<JsonLambdaTelemetry>,
         logs_tx: BoundedSender<Message<ResourceLogs>>,
     ) -> Self {
         Self {
@@ -182,7 +184,7 @@ where
 }
 
 async fn handle_request<H>(
-    bus_tx: BoundedSender<LambdaTelemetry>,
+    bus_tx: BoundedSender<JsonLambdaTelemetry>,
     logs_tx: BoundedSender<Message<ResourceLogs>>,
     resource: Resource,
     body: H,
@@ -193,7 +195,7 @@ where
 {
     let buf = body.collect().await.unwrap().to_bytes();
 
-    let events: Vec<LambdaTelemetry> = serde_json::from_slice(&buf.to_vec())
+    let events: Vec<JsonLambdaTelemetry> = serde_json::from_slice(&buf.to_vec())
         .map_err(|e| format!("unable to parse telemetry events from json: {}", e))?;
 
     let mut log_events = vec![];
