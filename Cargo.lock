@@ -1222,11 +1222,11 @@ dependencies = [
 
 [[package]]
 name = "lambda-extension"
-version = "0.11.0"
-source = "git+https://github.com/streamfold/aws-lambda-rust-runtime?branch=json-record-types#c0dedcf149593ffb17d25097d9e01f0e404d88d8"
+version = "1.0.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5f2c5885912a339367442b38e5f9cd99938f5d5fc39fbe81fefc0079a08158a2"
 dependencies = [
  "async-stream",
- "bytes",
  "chrono",
  "http",
  "http-body-util",
@@ -1243,8 +1243,9 @@ dependencies = [
 
 [[package]]
 name = "lambda_runtime_api_client"
-version = "0.11.1"
-source = "git+https://github.com/streamfold/aws-lambda-rust-runtime?branch=json-record-types#c0dedcf149593ffb17d25097d9e01f0e404d88d8"
+version = "1.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7b4873061514cb57ffb6a599b77c46c65d6d783efe9bad8fd56b7cba7f0459ef"
 dependencies = [
  "bytes",
  "futures-channel",
@@ -1254,9 +1255,7 @@ dependencies = [
  "http-body-util",
  "hyper",
  "hyper-util",
- "tokio",
  "tower",
- "tower-service",
  "tracing",
  "tracing-subscriber",
 ]

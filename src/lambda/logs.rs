@@ -188,10 +188,12 @@ mod tests {
     "record": "[INFO] Hello world, I am an extension!"
 }"#;
 
-        let as_json: LambdaTelemetryRecord = serde_json::from_str(json_rec).unwrap();
+        let as_json: LambdaTelemetryRecord<serde_json::Value> =
+            serde_json::from_str(json_rec).unwrap();
         println!("as json: {:?}", as_json);
 
-        let as_str: LambdaTelemetryRecord = serde_json::from_str(str_rec).unwrap();
+        let as_str: LambdaTelemetryRecord<serde_json::Value> =
+            serde_json::from_str(str_rec).unwrap();
         println!("as str: {:?}", as_str);
     }
 
